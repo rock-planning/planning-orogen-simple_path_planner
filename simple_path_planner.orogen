@@ -1,0 +1,53 @@
+name "simple_path_planner"
+# Optionally declare the version number
+# version "0.1"
+
+using_library "simple_path_planner"
+using_library "envire"
+import_types_from "base"
+import_types_from "pointcloud_creator"
+import_types_from "envire"	
+
+task_context "Task" do
+    needs_configuration
+
+    # Properties
+    property("terrain_classes_path", "std/string", "terrain_classes.txt").
+        doc("Path to the terrain class definition file")
+
+    property("robot_footprint_size", "int", 0).
+        doc("Defines the robot footprint size for the TraversabilitySearch")
+
+    property("inflate_max", "bool", false).
+        doc("Enter description here")
+
+    property("traversability_map_id", "std/string", "traversability").
+        doc("Required to extract the traversability map from the received envire-environment.")
+
+    property("traversability_map_band", "std/string", "traversability").
+        doc("Data band of the envire traversability map, required to load the trav. map into nav_graph_search")
+
+    # Input
+    input_port('traversability_map_in', ro_ptr('std/vector</envire/BinaryEvent>')).
+        doc("Traversability map. Has to be received once")
+
+    input_port('start_position_in', 'base/Vector3d').
+        doc "Start position in the world, just using x and y"
+
+    input_port('target_position_in', 'base/Vector3d').
+        doc "Target position in the world, just using x and y"
+
+    input_port("robot_pose_in", "base/samples/RigidBodyState").
+        doc "Position and orientation of the robot in the world, can be used to set the start position"
+
+    input_port('traversability_update_in', '/pointcloud_creator/GridUpdate').
+        doc "Contains the new values of all changed patches"
+
+    # Output
+    output_port('trajectory_out', '/std/vector<base::Waypoint>').
+        doc "Trajectory from start to target position (or to the closest position within the known map), just using x and y"
+
+   periodic 0.1
+end
+
+# Test deployment not required anymore?

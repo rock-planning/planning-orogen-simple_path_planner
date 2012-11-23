@@ -1,0 +1,13 @@
+<package>
+  <description brief="Module for the simple_path_planner library.">
+  
+  </description>
+  <author>Stefan Haase/stefan.haase@dfki.de</author>
+  <license></license>
+  <url>http://</url>
+  <logo>http://</logo>
+  <depend package="planning/simple_path_planner" />
+  <depend package="slam/envire" />
+  <depend package="slam/orogen/pointcloud_creator" />
+  <depend package="base/orogen/types" />
+</package>
