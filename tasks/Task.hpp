@@ -34,6 +34,7 @@ namespace simple_path_planner {
         SimplePathPlanner* mPlanner;
         bool mReceivedStartPos;
         bool mReceivedGoalPos;
+        int mNumOfUpdatedPatches;
 
         /**
          * Does the following initializations:\n

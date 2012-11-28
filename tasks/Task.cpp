@@ -14,7 +14,8 @@ Task::Task(std::string const& name)
     mpNavGraphTravMap(NULL),
     mPlanner(NULL),
     mReceivedStartPos(false),
-    mReceivedGoalPos(false)
+    mReceivedGoalPos(false),
+    mNumOfUpdatedPatches(0)
 {
 }
 
@@ -25,7 +26,8 @@ Task::Task(std::string const& name, RTT::ExecutionEngine* engine)
     mpNavGraphTravMap(NULL),
     mPlanner(NULL),
     mReceivedStartPos(false),
-    mReceivedGoalPos(false)
+    mReceivedGoalPos(false),
+    mNumOfUpdatedPatches(0)
 {
 }
 
@@ -77,7 +79,7 @@ bool Task::init() {
         //         2: map_scale / 0.083 
         // to 
         //        12: map_scale / 0.83
-        for(int i=1; i<12; i++) {
+        for(int i=1; i<13; i++) {
             terrain_class.in = terrain_class.out = i;
             terrain_class.cost = (i-1) / 12.0; 
             terrain_classes.push_back(terrain_class);
@@ -89,8 +91,8 @@ bool Task::init() {
     
     // Import envire traversability map into nav_graph_search::TraversabilityMap
     try {
-    mpNavGraphTravMap = nav_graph_search::TraversabilityMap::load(*traversability, 
-            _traversability_map_band.get(), terrain_classes);
+        mpNavGraphTravMap = nav_graph_search::TraversabilityMap::load(*traversability, 
+                _traversability_map_band.get(), terrain_classes);
     } catch (std::runtime_error& e) {
         RTT::log(RTT::Error) << "Loading traversability map error: " << e.what() << RTT::endlog();
         return false;
@@ -143,33 +145,38 @@ void Task::updateHook()
     }
 
     base::Vector3d pos;
-    if (_start_position_in.read(pos))
+    if (_start_position_in.read(pos) == RTT::NewData)
     {
         mPlanner->setStartPositionWorld(pos);
         mReceivedStartPos = received_new_positions = true;
     }
-    if (_target_position_in.read(pos))
+    if (_target_position_in.read(pos) == RTT::NewData)
     {
         mPlanner->setGoalPositionWorld(pos);
         mReceivedGoalPos = received_new_positions = true;
     }
     base::samples::RigidBodyState rbs;
-    if (_robot_pose_in.read(rbs))
+    if (_robot_pose_in.read(rbs) == RTT::NewData)
     {
         mPlanner->setStartPositionWorld(rbs.position);
         mReceivedStartPos = received_new_positions = true;
     }
 
     pointcloud_creator::GridUpdate grid_update;
-    if (_traversability_update_in.read(grid_update))
+    if (_traversability_update_in.read(grid_update) == RTT::NewData) // while? == RTT::NewData?
     {
         base::Vector3d vec;
         for(unsigned int i=0; i < grid_update.mUpdatedPatches.size(); ++i) {
             vec = grid_update.mUpdatedPatches[i];
             mPlanner->updateCellEnvire(vec[0], vec[1], (uint8_t)vec[2]);
         }
-        if(grid_update.mUpdatedPatches.size()) {
+        mNumOfUpdatedPatches += grid_update.mUpdatedPatches.size();
+        double updated_per = (mNumOfUpdatedPatches * 100) / (mpNavGraphTravMap->xSize() * mpNavGraphTravMap->ySize() * 1.0);
+        if( updated_per > _recalculate_trajectory_threshold.get() ) {
+            RTT::log(RTT::Info) << "Trajectory will be recalculated, " << updated_per 
+                    << "% of the patches have been updated" << RTT::endlog();
             received_trav_update = true;
+            mNumOfUpdatedPatches = 0;
         }
     }
 
@@ -178,7 +185,16 @@ void Task::updateHook()
             if(!mPlanner->calculateTrajectory()) {
                 RTT::log(RTT::Warning) << "Trajectory could not be calculated" << RTT::endlog();
             } else {
-                _trajectory_out.write(mPlanner->getTrajectory());
+                std::vector<base::Waypoint> trajectory = mPlanner->getTrajectory();
+                _trajectory_out.write(trajectory );
+                std::stringstream oss;
+                oss << "Calculated trajectory: " << std::endl;
+                for(unsigned int i = 0; i < trajectory.size(); ++i) {
+                    base::Vector3d p = trajectory[i].position;
+                    oss << "(" << p[0] << ", " << p[1] << ") ";
+                }
+                oss << std::endl;
+                RTT::log(RTT::Info) << oss.str() << RTT::endlog();
             }
         }
     }
