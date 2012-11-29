@@ -30,6 +30,9 @@ task_context "Task" do
     property("recalculate_trajectory_threshold", "double", 1.0).
         doc("The trajectory will be recalculated if x percent of the patches have been updated")
 
+    property("time_replan_robot_pos", "double", 6.0).
+        doc("Can be used to control the replanning after receiving a new robot pos, time in seconds")
+
     # Input
     input_port('traversability_map_in', ro_ptr('std/vector</envire/BinaryEvent>')).
         doc("Traversability map. Has to be received once")
@@ -47,7 +50,7 @@ task_context "Task" do
         doc "Contains the new values of all changed patches"
 
     # Output
-    output_port('trajectory_out', '/std/vector<base::Waypoint>').
+    output_port('trajectory_out', '/std/vector<base::Vector3d>').
         doc "Trajectory from start to target position (or to the closest position within the known map), just using x and y"
 
    periodic 0.1

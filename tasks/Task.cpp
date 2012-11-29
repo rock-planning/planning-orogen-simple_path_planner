@@ -185,12 +185,13 @@ void Task::updateHook()
             if(!mPlanner->calculateTrajectory()) {
                 RTT::log(RTT::Warning) << "Trajectory could not be calculated" << RTT::endlog();
             } else {
-                std::vector<base::Waypoint> trajectory = mPlanner->getTrajectory();
+                std::vector<base::Vector3d> trajectory = mPlanner->getTrajectory();
+                // TODO Add z values extracted from the MLS map? Would require height updates.
                 _trajectory_out.write(trajectory );
                 std::stringstream oss;
                 oss << "Calculated trajectory: " << std::endl;
                 for(unsigned int i = 0; i < trajectory.size(); ++i) {
-                    base::Vector3d p = trajectory[i].position;
+                    base::Vector3d p = trajectory[i];
                     oss << "(" << p[0] << ", " << p[1] << ") ";
                 }
                 oss << std::endl;
