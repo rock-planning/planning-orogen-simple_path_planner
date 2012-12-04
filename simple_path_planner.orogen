@@ -21,20 +21,23 @@ task_context "Task" do
     property("inflate_max", "bool", false).
         doc("Enter description here")
 
+    #property("mls_map_id", "std/string", "/mls").
+    #    doc("Required to extract the mls map from the received envire-environment. Attaching the map to the environment adds a / as a prefix to the ID")
+
     property("traversability_map_id", "std/string", "/traversability").
         doc("Required to extract the traversability map from the received envire-environment. Attaching the map to the environment adds a / as a prefix to the ID")
 
     property("traversability_map_band", "std/string", "traversability").
         doc("Data band of the envire traversability map, required to load the trav. map into nav_graph_search")
 
-    property("recalculate_trajectory_threshold", "double", 1.0).
+    property("recalculate_trajectory_patch_threshold", "double", 1.0).
         doc("The trajectory will be recalculated if x percent of the patches have been updated")
 
-    property("time_replan_robot_pos", "double", 6.0).
-        doc("Can be used to control the replanning after receiving a new robot pos, time in seconds")
+    property("recalculate_trajectory_distance_threshold", "double", 0.2).
+        doc("If the distance between the current robot position and its position during the last recalculation exceeds this threshold, the trajectory will be recalculated")
 
     # Input
-    input_port('traversability_map_in', ro_ptr('std/vector</envire/BinaryEvent>')).
+    input_port('envire_environment_in', ro_ptr('std/vector</envire/BinaryEvent>')).
         doc("Traversability map. Has to be received once")
 
     input_port('start_position_in', 'base/Vector3d').
@@ -44,7 +47,7 @@ task_context "Task" do
         doc "Target position in the world, just using x and y"
 
     input_port("robot_pose_in", "base/samples/RigidBodyState").
-        doc "Position and orientation of the robot in the world, can be used to set the start position"
+        doc "Position and orientation of the robot in the world, can be used to set the start position as well"
 
     input_port('traversability_update_in', '/pointcloud_creator/GridUpdate').
         doc "Contains the new values of all changed patches"
@@ -53,7 +56,10 @@ task_context "Task" do
     output_port('trajectory_out', '/std/vector<base::Vector3d>').
         doc "Trajectory from start to target position (or to the closest position within the known map), just using x and y"
 
-   periodic 0.1
+    output_port("trajectory_spline_out", "std::vector</base/Trajectory>").
+        doc("Special wrapping for the trajectory follower")
+
+    periodic(0.1)
 end
 
 deployment "simple_path_planner_deployment" do

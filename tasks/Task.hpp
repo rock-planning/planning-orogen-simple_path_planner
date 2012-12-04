@@ -7,6 +7,10 @@
 
 #include "simple_path_planner/SimplePathPlanner.hpp"
 
+namespace envire {
+    class MLSGrid;
+}
+
 namespace simple_path_planner {
 
     /*! \class Task 
@@ -31,10 +35,14 @@ namespace simple_path_planner {
         bool mInitialized;
         std::list<nav_graph_search::TerrainClass> terrain_classes;
         nav_graph_search::TraversabilityMap* mpNavGraphTravMap;
+        envire::MLSGrid* mpMLSGrid;
+        double* mpMLSHeights; // Is used to store the mls heights (MLSGrid->updateCell caused seg faults)
         SimplePathPlanner* mPlanner;
         bool mReceivedStartPos;
         bool mReceivedGoalPos;
         int mNumOfUpdatedPatches;
+        base::samples::RigidBodyState mRobotPose;
+        base::Vector3d mPosLastRecalculation;
 
         /**
          * Does the following initializations:\n
@@ -45,6 +53,8 @@ namespace simple_path_planner {
          * 5. Creates the SimplePathPlanner object.
          */
         bool init();
+
+        double getHeightMLS(size_t xi, size_t yi);
 
     public:
         /** TaskContext constructor for Task
