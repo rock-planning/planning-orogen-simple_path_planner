@@ -35,7 +35,6 @@ namespace simple_path_planner {
         bool mInitialized;
         std::list<nav_graph_search::TerrainClass> terrain_classes;
         nav_graph_search::TraversabilityMap* mpNavGraphTravMap;
-        envire::MLSGrid* mpMLSGrid;
         double* mpMLSHeights; // Is used to store the mls heights (MLSGrid->updateCell caused seg faults)
         SimplePathPlanner* mPlanner;
         bool mReceivedStartPos;
@@ -55,6 +54,7 @@ namespace simple_path_planner {
         bool init();
 
         double getHeightMLS(size_t xi, size_t yi);
+        bool setHeightMLS(size_t xi, size_t yi, double height);
 
     public:
         /** TaskContext constructor for Task

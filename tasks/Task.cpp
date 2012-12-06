@@ -13,7 +13,7 @@ Task::Task(std::string const& name)
     mInitialized(false),
     terrain_classes(),
     mpNavGraphTravMap(NULL),
-    mpMLSGrid(NULL),
+    mpMLSHeights(NULL),
     mPlanner(NULL),
     mReceivedStartPos(false),
     mReceivedGoalPos(false),
@@ -28,7 +28,7 @@ Task::Task(std::string const& name, RTT::ExecutionEngine* engine)
     mInitialized(false),
     terrain_classes(),
     mpNavGraphTravMap(NULL),
-    mpMLSGrid(NULL),
+    mpMLSHeights(NULL),
     mPlanner(NULL),
     mReceivedStartPos(false),
     mReceivedGoalPos(false),
@@ -42,6 +42,10 @@ Task::~Task()
 {
     if(mPlanner != NULL) {
         delete mPlanner; mPlanner = NULL;
+    }
+    if(mpMLSHeights != NULL) {
+        free(mpMLSHeights);
+        mpMLSHeights = NULL;
     }
 }
 
@@ -70,19 +74,6 @@ bool Task::init() {
     } else {
         RTT::log(RTT::Info) << "Traversability map with ID " << 
                 _traversability_map_id.get() << " extracted" << RTT::endlog();
-    }
-
-    // Extract mls map from evironment.
-    mpMLSGrid = env.getItem< envire::MLSGrid >(_mls_map_id.get()).get();
-
-    if (!mpMLSGrid)
-    {
-        RTT::log(RTT::Warning) << "No mls map with ID " << 
-                _mls_map_id.get() << RTT::endlog();
-        return false;
-    } else {
-        RTT::log(RTT::Info) << "MLS map with ID " << 
-                _mls_map_id.get() << " extracted" << RTT::endlog();
     }
 
     // Load terrain classes.
@@ -125,6 +116,13 @@ bool Task::init() {
         return false;
     }
 
+    // Create array to store heights.
+    if(mpMLSHeights != NULL) {
+        free(mpMLSHeights);
+        mpMLSHeights = NULL;
+    }
+    mpMLSHeights = (double*)calloc(mpNavGraphTravMap->xSize() * mpNavGraphTravMap->ySize(), sizeof(double));
+
     // Create SimplePathPlanner object.
     mPlanner = new SimplePathPlanner(*mpNavGraphTravMap, terrain_classes, 
             _robot_footprint_size.get(), _inflate_max.get());
@@ -133,21 +131,26 @@ bool Task::init() {
 }
 
 double Task::getHeightMLS(size_t xi, size_t yi) {
-    // Add height information to each waypoint extracted from the MLS map.
-    float height = 0.0;
-    float sum = 0.0;
-    float counter = 0.0;
-    envire::MLSGrid::iterator it =  mpMLSGrid->beginCell(xi, yi);
-    // Runs through all patches and ignores the 'empty-ones'
-    for(; it != mpMLSGrid->endCell(); ++it) {
-        sum += it->mean;
-        counter++;
+    if(mpMLSHeights == NULL) {
+        RTT::log(RTT::Warning) << "No memory allocated to store the height of the patches" << RTT::endlog();
+        return 0;
     }
-    if(counter > 0.0) {
-        // Trajectory should be a little bit higher than the patches.
-        height = sum / counter;
+    if(xi < (size_t)mpNavGraphTravMap->xSize() && yi < (size_t)mpNavGraphTravMap->ySize()) {
+        return mpMLSHeights[xi + yi * mpNavGraphTravMap->ySize()];
+    } else {
+        RTT::log(RTT::Warning) << "Height of cell (" << xi << ", " << yi <<
+                ") could not be requested, out of grid" << RTT::endlog();
+        return 0;
     }
-    return height;
+}
+
+bool Task::setHeightMLS(size_t xi, size_t yi, double height) {
+    if(xi < mpNavGraphTravMap->xSize() && yi <  mpNavGraphTravMap->ySize()) {
+        mpMLSHeights[xi + yi * mpNavGraphTravMap->ySize()] = height;
+        return true;
+    }
+    RTT::log(RTT::Info) << "(" << xi << ", " << yi << ") is not located within the grid" << RTT::endlog();
+    return false;
 }
 
 /// The following lines are template definitions for the various state machine
@@ -221,8 +224,9 @@ void Task::updateHook()
             vec = grid_update.mUpdatedPatches[i];
             int class_ = grid_update.mUpdatedClasses[i];
             mPlanner->updateCellEnvire(vec[0], vec[1], (uint8_t)class_);
-            RTT::log(RTT::Warning) << "Update cell " << vec[0] << ", " << vec[1] << " with height " << vec[2] << RTT::endlog();
-            //mpMLSGrid->updateCell(vec[0], vec[1], vec[2], 0); // Update mean height of the MLS map (to generate 3D trajectories).
+            //Update height to be able to generate 3D trajectories.
+            setHeightMLS((size_t)vec[0], (size_t)vec[1], vec[2]);
+            //mpMLSHeights[vec[0] + vec[1] * mpNavGraphTravMap->ySize()] = vec[2];
         }
         mNumOfUpdatedPatches += grid_update.mUpdatedPatches.size();
         double updated_per = (mNumOfUpdatedPatches * 100) / (mpNavGraphTravMap->xSize() * mpNavGraphTravMap->ySize() * 1.0);
@@ -240,16 +244,17 @@ void Task::updateHook()
                 RTT::log(RTT::Warning) << "Trajectory could not be calculated" << RTT::endlog();
             } else {
                 std::vector<base::Vector3d> trajectory = mPlanner->getTrajectory();
-                // Add z values extracted from the MLS map.
+                // Add z values if available, otherwise 0.
                 size_t xi = 0, yi =0;
                 base::Vector3d v;
                 std::vector<base::Vector3d>::iterator it = trajectory.begin();
                 for(; it != trajectory.end(); ++it) {
                     v = *it;
-                    if(mpMLSGrid->toGrid(v[0], v[1], xi, yi)) {
+                    // Convert trajectory waypoint from world to local again.
+                    if(mPlanner->toLocal(v[0], v[1], xi, yi)) {
                         (*it)[2] = getHeightMLS(xi, yi); // Assign height to the vector.
-                        RTT::log(RTT::Warning) << "Assign height " << (*it)[2] << " to point (" <<
-                            v[0] << ", " << v[1] <<  RTT::endlog(); 
+                        RTT::log(RTT::Debug) << "Assign height " << (*it)[2] << " to point (" <<
+                            v[0] << ", " << v[1] << ")" <<  RTT::endlog(); 
                     } else {
                         RTT::log(RTT::Warning) << "Trajectoty contains out-of-grid point (" <<
                             v[0] << ", " << v[1] << "), patch is (" << xi << ", " << yi << ")" <<  RTT::endlog(); 
