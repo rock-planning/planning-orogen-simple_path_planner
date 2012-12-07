@@ -93,14 +93,29 @@ bool Task::init() {
         //         2: map_scale / 0.083 
         // to 
         //        12: map_scale / 0.83
+        /*
         for(int i=1; i<13; i++) {
             terrain_class.in = terrain_class.out = i;
-            terrain_class.cost = (i-1) / 12.0; 
+            terrain_class.cost = ((i-1) * (i-1) ) / 12.0;//(i-1) / 12.0; 
             terrain_classes.push_back(terrain_class);
         }
         terrain_class.in = terrain_class.out = 0; // Unknown.
-        terrain_class.cost = 3.5 / 12;
+        terrain_class.cost = (5 * 5) / 12.0; //3.5 / 12;
         terrain_classes.push_back(terrain_class);
+        */
+        terrain_class.in = terrain_class.out = 0;
+        terrain_class.cost = 1000;
+        terrain_classes.push_back(terrain_class);
+        for(int i=1; i<5; i++) {
+            terrain_class.in = terrain_class.out = i;
+            terrain_class.cost = 0;
+            terrain_classes.push_back(terrain_class);
+        }
+        for(int i=5; i<13; i++) {
+            terrain_class.in = terrain_class.out = i;
+            terrain_class.cost = 1000;
+            terrain_classes.push_back(terrain_class);
+        }
     }
     
     // Import envire traversability map into nav_graph_search::TraversabilityMap
@@ -240,6 +255,7 @@ void Task::updateHook()
 
     if(mReceivedStartPos && mReceivedGoalPos) {
         if(received_new_positions || received_trav_update) {
+            //mPlanner->printInformations();
             if(!mPlanner->calculateTrajectory()) {
                 RTT::log(RTT::Warning) << "Trajectory could not be calculated" << RTT::endlog();
             } else {
@@ -252,7 +268,7 @@ void Task::updateHook()
                     v = *it;
                     // Convert trajectory waypoint from world to local again.
                     if(mPlanner->toLocal(v[0], v[1], xi, yi)) {
-                        (*it)[2] = getHeightMLS(xi, yi); // Assign height to the vector.
+                        (*it)[2] = getHeightMLS(xi, yi) + 0.1; // Assign height to the vector + 0.1
                         RTT::log(RTT::Debug) << "Assign height " << (*it)[2] << " to point (" <<
                             v[0] << ", " << v[1] << ")" <<  RTT::endlog(); 
                     } else {
