@@ -93,16 +93,22 @@ bool Task::init() {
         //         2: map_scale / 0.083 
         // to 
         //        12: map_scale / 0.83
-        /*
-        for(int i=1; i<13; i++) {
+        
+        for(int i=1; i<5; i++) {
             terrain_class.in = terrain_class.out = i;
-            terrain_class.cost = ((i-1) * (i-1) ) / 12.0;//(i-1) / 12.0; 
+            terrain_class.cost = 0; 
+            terrain_classes.push_back(terrain_class);
+        }
+        for(int i=5; i<13; i++) {
+            terrain_class.in = terrain_class.out = i;
+            terrain_class.cost = i / 12.0;//(i-1) / 12.0; 
             terrain_classes.push_back(terrain_class);
         }
         terrain_class.in = terrain_class.out = 0; // Unknown.
-        terrain_class.cost = (5 * 5) / 12.0; //3.5 / 12;
+        terrain_class.cost = 8 / 12.0; //3.5 / 12;
         terrain_classes.push_back(terrain_class);
-        */
+        
+        /*
         terrain_class.in = terrain_class.out = 0;
         terrain_class.cost = 1000;
         terrain_classes.push_back(terrain_class);
@@ -116,6 +122,7 @@ bool Task::init() {
             terrain_class.cost = 1000;
             terrain_classes.push_back(terrain_class);
         }
+        */
     }
     
     // Import envire traversability map into nav_graph_search::TraversabilityMap
