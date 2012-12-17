@@ -93,7 +93,7 @@ bool Task::init() {
         //         2: map_scale / 0.083 
         // to 
         //        12: map_scale / 0.83
-        
+        /*
         for(int i=1; i<5; i++) {
             terrain_class.in = terrain_class.out = i;
             terrain_class.cost = 0; 
@@ -107,8 +107,8 @@ bool Task::init() {
         terrain_class.in = terrain_class.out = 0; // Unknown.
         terrain_class.cost = 8 / 12.0; //3.5 / 12;
         terrain_classes.push_back(terrain_class);
+        */
         
-        /*
         terrain_class.in = terrain_class.out = 0;
         terrain_class.cost = 1000;
         terrain_classes.push_back(terrain_class);
@@ -122,7 +122,7 @@ bool Task::init() {
             terrain_class.cost = 1000;
             terrain_classes.push_back(terrain_class);
         }
-        */
+        
     }
     
     // Import envire traversability map into nav_graph_search::TraversabilityMap
@@ -265,6 +265,7 @@ void Task::updateHook()
             //mPlanner->printInformations();
             if(!mPlanner->calculateTrajectory()) {
                 RTT::log(RTT::Warning) << "Trajectory could not be calculated" << RTT::endlog();
+                //mPosLastRecalculation = mRobotPose.position; // Prevents recalculation during every update loop.
             } else {
                 std::vector<base::Vector3d> trajectory = mPlanner->getTrajectory();
                 // Add z values if available, otherwise 0.
