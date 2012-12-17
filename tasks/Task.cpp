@@ -19,7 +19,9 @@ Task::Task(std::string const& name)
     mReceivedGoalPos(false),
     mNumOfUpdatedPatches(0),
     mRobotPose(),
-    mPosLastRecalculation(0,0,0)
+    mPosLastRecalculation(0,0,0),
+    mStartPos(0,0,0),
+    mGoalPos(0,0,0)
 {
 }
 
@@ -34,7 +36,9 @@ Task::Task(std::string const& name, RTT::ExecutionEngine* engine)
     mReceivedGoalPos(false),
     mNumOfUpdatedPatches(0),
     mRobotPose(),
-    mPosLastRecalculation(0,0,0)
+    mPosLastRecalculation(0,0,0),
+    mStartPos(0,0,0),
+    mGoalPos(0,0,0)
 {
 }
 
@@ -54,7 +58,7 @@ bool Task::init() {
         return true;
 
     envire::OrocosEmitter::Ptr binary_event;
-    if (!_envire_environment_in.read(binary_event))
+    if (_envire_environment_in.read(binary_event) != RTT::NewData)
     {
         return false;
     }
@@ -126,6 +130,11 @@ bool Task::init() {
     }
     
     // Import envire traversability map into nav_graph_search::TraversabilityMap
+    if(mpNavGraphTravMap != NULL) {
+        delete mpNavGraphTravMap;
+        mpNavGraphTravMap = NULL;
+    }
+
     try {
         mpNavGraphTravMap = nav_graph_search::TraversabilityMap::load(*traversability, 
                 _traversability_map_band.get(), terrain_classes);
@@ -138,14 +147,16 @@ bool Task::init() {
         return false;
     }
 
-    // Create array to store heights.
-    if(mpMLSHeights != NULL) {
-        free(mpMLSHeights);
-        mpMLSHeights = NULL;
+    // Create array to store heights, just once!
+    if(mpMLSHeights == NULL) {
+        mpMLSHeights = (double*)calloc(mpNavGraphTravMap->xSize() * mpNavGraphTravMap->ySize(), sizeof(double));
     }
-    mpMLSHeights = (double*)calloc(mpNavGraphTravMap->xSize() * mpNavGraphTravMap->ySize(), sizeof(double));
 
     // Create SimplePathPlanner object.
+    if(mPlanner != NULL) {
+        delete mPlanner;
+        mPlanner = NULL;
+    }
     mPlanner = new SimplePathPlanner(*mpNavGraphTravMap, terrain_classes, 
             _robot_footprint_size.get(), _inflate_max.get());
    
@@ -201,6 +212,7 @@ void Task::updateHook()
     bool received_new_positions = false;
     bool received_trav_update = false;
 
+    /*
     if(!mInitialized) {
         if(init()) {
             mInitialized = true;    
@@ -209,34 +221,50 @@ void Task::updateHook()
             return;
         }
     }
+    */
+    /**
+     * Just for testing:
+     * Reinitialises the complete planner in each updateHook using the complete
+     * received traversability map. This could fix the cant-find-path-problem.
+     * But the update interval has to be increased, at least 0.9 ( slightly lower than
+     * the send-environment-interval) 
+     */
+    if(!init()) {
+        return;
+    } else {
+        //received_trav_update = true; // only the movement of the robot should initiiate planning
+        mPlanner->setStartPositionWorld(mStartPos);
+        mPlanner->setGoalPositionWorld(mGoalPos);
+    }
+    
 
-    base::Vector3d pos;
-    if (_start_position_in.read(pos) == RTT::NewData)
+    if (_start_position_in.read(mStartPos) == RTT::NewData)
     {
-        mPlanner->setStartPositionWorld(pos);
+        mPlanner->setStartPositionWorld(mStartPos);
         mReceivedStartPos = received_new_positions = true;
     }
 
-    if (_target_position_in.read(pos) == RTT::NewData)
+    if (_target_position_in.read(mGoalPos) == RTT::NewData)
     {
-        mPlanner->setGoalPositionWorld(pos);
+        mPlanner->setGoalPositionWorld(mGoalPos);
         mReceivedGoalPos = received_new_positions = true;
     }
 
     if (_robot_pose_in.read(mRobotPose) == RTT::NewData)
     {
+        mStartPos = mRobotPose.position;  
         // Recalculate the trajectory if the distance exceeds a threshold
         base::Vector3d p1 = mRobotPose.position;
         base::Vector3d p2 = mPosLastRecalculation;
         double distance = sqrt(pow(p1[0] - p2[0],2) + pow(p1[1] - p2[1],2) + pow(p1[2] - p2[2],2));
-        if(distance > _recalculate_trajectory_distance_threshold.get()) {
+        if(distance > _recalculate_trajectory_distance_threshold.get()) {  
             mPlanner->setStartPositionWorld(mRobotPose.position);
             mReceivedStartPos = received_new_positions = true;
             RTT::log(RTT::Info) << "Trajectory will be recalculated, distance to last position of recalculation (" <<
                     distance << ") exceeds threshold" << RTT::endlog();
         }
     }
-
+    /*
     pointcloud_creator::GridUpdate grid_update;
     if (_traversability_update_in.read(grid_update) == RTT::NewData)
     {
@@ -259,6 +287,7 @@ void Task::updateHook()
             mNumOfUpdatedPatches = 0;
         }
     }
+    */
 
     if(mReceivedStartPos && mReceivedGoalPos) {
         if(received_new_positions || received_trav_update) {

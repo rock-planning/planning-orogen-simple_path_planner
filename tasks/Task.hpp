@@ -42,6 +42,8 @@ namespace simple_path_planner {
         int mNumOfUpdatedPatches;
         base::samples::RigidBodyState mRobotPose;
         base::Vector3d mPosLastRecalculation;
+        base::Vector3d mStartPos;
+        base::Vector3d mGoalPos;
 
         /**
          * Does the following initializations:\n
