@@ -33,6 +33,9 @@ task_context "Task" do
     property("recalculate_trajectory_distance_threshold", "double", 0.2).
         doc("If the distance between the current robot position and its position during the last recalculation exceeds this threshold, the trajectory will be recalculated")
 
+    property("replan_timeout_ms", "int", 20000).
+        doc("Used to initiate replannig after the defined amount of time (in milliseconds)")
+
     # Input
     input_port('envire_environment_in', ro_ptr('std/vector</envire/BinaryEvent>')).
         doc("Traversability map. Has to be received once")

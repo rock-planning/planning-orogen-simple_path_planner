@@ -7,6 +7,8 @@
 
 #include "simple_path_planner/SimplePathPlanner.hpp"
 
+#include <sys/time.h>
+
 namespace envire {
     class MLSGrid;
 }
@@ -45,6 +47,7 @@ namespace simple_path_planner {
         base::Vector3d mStartPos;
         base::Vector3d mGoalPos;
 
+        timeval mLastReplan; // Used to replan after a certain amount of time (needed if the Robot stucks)
         /**
          * Does the following initializations:\n
          * 1. Tries to receive a envire::Environment on port 'traversability_map_in'.\n

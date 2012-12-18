@@ -21,7 +21,8 @@ Task::Task(std::string const& name)
     mRobotPose(),
     mPosLastRecalculation(0,0,0),
     mStartPos(0,0,0),
-    mGoalPos(0,0,0)
+    mGoalPos(0,0,0),
+    mLastReplan()
 {
 }
 
@@ -38,7 +39,8 @@ Task::Task(std::string const& name, RTT::ExecutionEngine* engine)
     mRobotPose(),
     mPosLastRecalculation(0,0,0),
     mStartPos(0,0,0),
-    mGoalPos(0,0,0)
+    mGoalPos(0,0,0),
+    mLastReplan()
 {
 }
 
@@ -97,22 +99,22 @@ bool Task::init() {
         //         2: map_scale / 0.083 
         // to 
         //        12: map_scale / 0.83
-        /*
-        for(int i=1; i<5; i++) {
+        
+        for(int i=1; i<6; i++) {
             terrain_class.in = terrain_class.out = i;
             terrain_class.cost = 0; 
             terrain_classes.push_back(terrain_class);
         }
-        for(int i=5; i<13; i++) {
+        for(int i=6; i<13; i++) {
             terrain_class.in = terrain_class.out = i;
-            terrain_class.cost = i / 12.0;//(i-1) / 12.0; 
+            terrain_class.cost = pow((i / 12.0),3);
             terrain_classes.push_back(terrain_class);
         }
         terrain_class.in = terrain_class.out = 0; // Unknown.
-        terrain_class.cost = 8 / 12.0; //3.5 / 12;
+        terrain_class.cost = pow((8 / 12.0),3);
         terrain_classes.push_back(terrain_class);
-        */
         
+        /*
         terrain_class.in = terrain_class.out = 0;
         terrain_class.cost = 1000;
         terrain_classes.push_back(terrain_class);
@@ -126,6 +128,7 @@ bool Task::init() {
             terrain_class.cost = 1000;
             terrain_classes.push_back(terrain_class);
         }
+        */
         
     }
     
@@ -195,6 +198,8 @@ bool Task::configureHook()
     if (! TaskBase::configureHook()) {
         return false;
     }
+
+    gettimeofday(&mLastReplan, 0);
     return true;
 }
 
@@ -264,6 +269,19 @@ void Task::updateHook()
                     distance << ") exceeds threshold" << RTT::endlog();
         }
     }
+
+    // Initiate replanning if the robot stucks 
+    bool replan_timeout = false;
+    timeval current_time;
+    gettimeofday(&current_time, 0);
+    int time_passed = (current_time.tv_sec - mLastReplan.tv_sec) * 1000 + 
+            (current_time.tv_usec - mLastReplan.tv_usec) / 1000;
+    if(time_passed > _replan_timeout_ms.get()) {
+        RTT::log(RTT::Info) << "Replanning initiated, robot did not change its position for " << _replan_timeout_ms.get() << " msec" << RTT::endlog();
+        replan_timeout = true;
+        mLastReplan = current_time;
+    }    
+
     /*
     pointcloud_creator::GridUpdate grid_update;
     if (_traversability_update_in.read(grid_update) == RTT::NewData)
@@ -290,7 +308,7 @@ void Task::updateHook()
     */
 
     if(mReceivedStartPos && mReceivedGoalPos) {
-        if(received_new_positions || received_trav_update) {
+        if(received_new_positions || received_trav_update || replan_timeout) {
             //mPlanner->printInformations();
             if(!mPlanner->calculateTrajectory()) {
                 RTT::log(RTT::Warning) << "Trajectory could not be calculated" << RTT::endlog();
