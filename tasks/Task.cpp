@@ -217,7 +217,7 @@ void Task::updateHook()
     bool received_new_positions = false;
     bool received_trav_update = false;
 
-    /*
+    
     if(!mInitialized) {
         if(init()) {
             mInitialized = true;    
@@ -226,7 +226,7 @@ void Task::updateHook()
             return;
         }
     }
-    */
+    
     /**
      * Just for testing:
      * Reinitialises the complete planner in each updateHook using the complete
@@ -234,6 +234,7 @@ void Task::updateHook()
      * But the update interval has to be increased, at least 0.9 ( slightly lower than
      * the send-environment-interval) 
      */
+    /*
     if(!init()) {
         return;
     } else {
@@ -241,6 +242,7 @@ void Task::updateHook()
         mPlanner->setStartPositionWorld(mStartPos);
         mPlanner->setGoalPositionWorld(mGoalPos);
     }
+    */
     
 
     if (_start_position_in.read(mStartPos) == RTT::NewData)
@@ -282,7 +284,7 @@ void Task::updateHook()
         mLastReplan = current_time;
     }    
 
-    /*
+    
     pointcloud_creator::GridUpdate grid_update;
     if (_traversability_update_in.read(grid_update) == RTT::NewData)
     {
@@ -305,7 +307,7 @@ void Task::updateHook()
             mNumOfUpdatedPatches = 0;
         }
     }
-    */
+    
 
     if(mReceivedStartPos && mReceivedGoalPos) {
         if(received_new_positions || received_trav_update || replan_timeout) {

@@ -59,7 +59,7 @@ task_context "Task" do
     output_port("trajectory_spline_out", "std::vector</base/Trajectory>").
         doc("Special wrapping for the trajectory follower")
 
-    periodic(0.9)
+    periodic(0.1)
 end
 
 deployment "simple_path_planner_deployment" do
