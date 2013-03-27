@@ -6,6 +6,7 @@
 #include "simple_path_planner/TaskBase.hpp"
 
 #include "simple_path_planner/SimplePathPlanner.hpp"
+#include <nav_graph_search/dstar_lite.hpp>
 
 #include <sys/time.h>
 
@@ -33,21 +34,36 @@ namespace simple_path_planner {
     {
 	friend class TaskBase;
     protected:
-
-        bool mInitialized;
-        std::list<nav_graph_search::TerrainClass> terrain_classes;
-        nav_graph_search::TraversabilityMap* mpNavGraphTravMap;
-        double* mpMLSHeights; // Is used to store the mls heights (MLSGrid->updateCell caused seg faults)
-        SimplePathPlanner* mPlanner;
-        bool mReceivedStartPos;
-        bool mReceivedGoalPos;
-        int mNumOfUpdatedPatches;
-        base::samples::RigidBodyState mRobotPose;
-        base::Vector3d mPosLastRecalculation;
+	///Optional mls grid for trajectory height adjustment
+	boost::intrusive_ptr<envire::MLSGrid> mMlsGrid;
+	
+	///The path planner
+//         SimplePathPlanner* mPlanner;
+	
+	nav_graph_search::DStarLite *mPlanner;
+	
+	///Current start position
         base::Vector3d mStartPos;
+	///Current goal position
         base::Vector3d mGoalPos;
 
-        timeval mLastReplan; // Used to replan after a certain amount of time (needed if the Robot stucks)
+	/**
+	 * Status of the traversability map
+	 * is is either 
+	 * old (no replan needed)
+	 * new (replan needed)
+	 * noData (no planning possible)
+	 */
+	RTT::FlowStatus mTraversabilityMapStatus;
+	///the last received traversability grid
+	envire::Grid<uint8_t> *mTraversabilityGrid;
+	envire::Environment *env;
+	
+	///time of the last planning
+	base::Time mLastReplanTime;
+	///start position of last planning 
+	base::Vector3d mLastStartPosition;
+
         /**
          * Does the following initializations:\n
          * 1. Tries to receive a envire::Environment on port 'traversability_map_in'.\n
@@ -58,9 +74,21 @@ namespace simple_path_planner {
          */
         bool init();
 
-        double getHeightMLS(size_t xi, size_t yi);
-        bool setHeightMLS(size_t xi, size_t yi, double height);
-
+	/**
+	 * This function adjustes the Z values of the given trajectory,
+	 * so that the trajectory is on the Surface of the MLS-Grid.
+	 * */
+	void adjustTrajectoryHeight(std::vector<base::Vector3d> &trajectory);
+	
+	/**
+	 * This function receives the traversability grid
+	 * and (if send) an mlsGrid.
+	 * 
+	 * It returns weather a new traversability grid is there / was received.
+	 * */
+	RTT::FlowStatus receiveEnvireData();
+	
+	void computeTraversabilityDiff(envire::Grid<uint8_t>* newGrid);
     public:
         /** TaskContext constructor for Task
          * \param name Name of the task. This name needs to be unique to make it identifiable via nameservices.

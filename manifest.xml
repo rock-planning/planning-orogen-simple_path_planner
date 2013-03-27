@@ -6,8 +6,9 @@
   <license></license>
   <url>http://</url>
   <logo>http://</logo>
-  <depend package="planning/simple_path_planner" />
+<!--   <depend package="planning/simple_path_planner" /> -->
+
+  <depend package="planning/nav_graph_search" />
   <depend package="slam/envire" />
-  <depend package="slam/orogen/pointcloud_creator" />
   <depend package="base/orogen/types" />
 </package>

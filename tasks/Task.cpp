@@ -5,193 +5,34 @@
 #include <nav_graph_search/terrain_classes.hpp>
 #include <envire/Orocos.hpp>
 #include <envire/maps/MLSGrid.hpp>
+#include <simple_path_planner/SimplePathPlanner.hpp>
 
 using namespace simple_path_planner;
 
 Task::Task(std::string const& name)
     : TaskBase(name),
-    mInitialized(false),
-    terrain_classes(),
-    mpNavGraphTravMap(NULL),
-    mpMLSHeights(NULL),
+    mMlsGrid(NULL),
     mPlanner(NULL),
-    mReceivedStartPos(false),
-    mReceivedGoalPos(false),
-    mNumOfUpdatedPatches(0),
-    mRobotPose(),
-    mPosLastRecalculation(0,0,0),
-    mStartPos(0,0,0),
-    mGoalPos(0,0,0),
-    mLastReplan()
+    mStartPos(Eigen::Vector3d::Zero()),
+    mGoalPos(Eigen::Vector3d::Zero()),
+    mLastStartPosition(Eigen::Vector3d::Zero())
 {
 }
 
 Task::Task(std::string const& name, RTT::ExecutionEngine* engine)
     : TaskBase(name, engine),
-    mInitialized(false),
-    terrain_classes(),
-    mpNavGraphTravMap(NULL),
-    mpMLSHeights(NULL),
+    mMlsGrid(NULL),
     mPlanner(NULL),
-    mReceivedStartPos(false),
-    mReceivedGoalPos(false),
-    mNumOfUpdatedPatches(0),
-    mRobotPose(),
-    mPosLastRecalculation(0,0,0),
-    mStartPos(0,0,0),
-    mGoalPos(0,0,0),
-    mLastReplan()
+    mStartPos(Eigen::Vector3d::Zero()),
+    mGoalPos(Eigen::Vector3d::Zero()),
+    mLastStartPosition(Eigen::Vector3d::Zero())
 {
 }
 
 Task::~Task()
 {
-    if(mPlanner != NULL) {
-        delete mPlanner; mPlanner = NULL;
-    }
-    if(mpMLSHeights != NULL) {
-        free(mpMLSHeights);
-        mpMLSHeights = NULL;
-    }
+    delete mPlanner;
 }
-
-bool Task::init() {
-    if(mInitialized)
-        return true;
-
-    envire::OrocosEmitter::Ptr binary_event;
-    if (_envire_environment_in.read(binary_event) != RTT::NewData)
-    {
-        return false;
-    }
-
-    envire::Environment env;
-    env.applyEvents(*binary_event);   
-
-    // Extract traversability map from evironment.
-    envire::Grid<uint8_t>* traversability =
-            env.getItem< envire::Grid<uint8_t> >(_traversability_map_id.get()).get();
-
-    if (!traversability)
-    {
-        RTT::log(RTT::Warning) << "No traversability map with ID " << 
-                _traversability_map_id.get() << RTT::endlog();
-        return false;
-    } else {
-        RTT::log(RTT::Info) << "Traversability map with ID " << 
-                _traversability_map_id.get() << " extracted" << RTT::endlog();
-    }
-
-    // Load terrain classes.
-    terrain_classes.clear();
-    try {
-        terrain_classes = nav_graph_search::TerrainClass::load(_terrain_classes_path.get());
-        if(terrain_classes.empty()) {
-            throw std::runtime_error("No terrain classes loaded, file empty?");
-        }
-    } catch (std::runtime_error& e) {
-        RTT::log(RTT::Warning) << "Loading terrain classes: " << e.what() << RTT::endlog();
-        RTT::log(RTT::Info) << "Default terrain classes will be used" << RTT::endlog();
-
-        struct nav_graph_search::TerrainClass terrain_class;
-        // cost -> 0: map_scale / 0.29
-        //         1: 1000000
-        //         2: map_scale / 0.083 
-        // to 
-        //        12: map_scale / 0.83
-        
-        for(int i=1; i<6; i++) {
-            terrain_class.in = terrain_class.out = i;
-            terrain_class.cost = 0; 
-            terrain_classes.push_back(terrain_class);
-        }
-        for(int i=6; i<13; i++) {
-            terrain_class.in = terrain_class.out = i;
-            terrain_class.cost = pow((i / 12.0),3);
-            terrain_classes.push_back(terrain_class);
-        }
-        terrain_class.in = terrain_class.out = 0; // Unknown.
-        terrain_class.cost = pow((8 / 12.0),3);
-        terrain_classes.push_back(terrain_class);
-        
-        /*
-        terrain_class.in = terrain_class.out = 0;
-        terrain_class.cost = 1000;
-        terrain_classes.push_back(terrain_class);
-        for(int i=1; i<5; i++) {
-            terrain_class.in = terrain_class.out = i;
-            terrain_class.cost = 0;
-            terrain_classes.push_back(terrain_class);
-        }
-        for(int i=5; i<13; i++) {
-            terrain_class.in = terrain_class.out = i;
-            terrain_class.cost = 1000;
-            terrain_classes.push_back(terrain_class);
-        }
-        */
-        
-    }
-    
-    // Import envire traversability map into nav_graph_search::TraversabilityMap
-    if(mpNavGraphTravMap != NULL) {
-        delete mpNavGraphTravMap;
-        mpNavGraphTravMap = NULL;
-    }
-
-    try {
-        mpNavGraphTravMap = nav_graph_search::TraversabilityMap::load(*traversability, 
-                _traversability_map_band.get(), terrain_classes);
-    } catch (std::runtime_error& e) {
-        RTT::log(RTT::Error) << "Loading traversability map error: " << e.what() << RTT::endlog();
-        return false;
-    }
-    if(mpNavGraphTravMap == NULL){
-        RTT::log(RTT::Error) << "Unknown class found, check the terrain class definition file" << RTT::endlog();
-        return false;
-    }
-
-    // Create array to store heights, just once!
-    if(mpMLSHeights == NULL) {
-        mpMLSHeights = (double*)calloc(mpNavGraphTravMap->xSize() * mpNavGraphTravMap->ySize(), sizeof(double));
-    }
-
-    // Create SimplePathPlanner object.
-    if(mPlanner != NULL) {
-        delete mPlanner;
-        mPlanner = NULL;
-    }
-    mPlanner = new SimplePathPlanner(*mpNavGraphTravMap, terrain_classes, 
-            _robot_footprint_size.get(), _inflate_max.get());
-   
-    return true;
-}
-
-double Task::getHeightMLS(size_t xi, size_t yi) {
-    if(mpMLSHeights == NULL) {
-        RTT::log(RTT::Warning) << "No memory allocated to store the height of the patches" << RTT::endlog();
-        return 0;
-    }
-    if(xi < (size_t)mpNavGraphTravMap->xSize() && yi < (size_t)mpNavGraphTravMap->ySize()) {
-        return mpMLSHeights[xi + yi * mpNavGraphTravMap->ySize()];
-    } else {
-        RTT::log(RTT::Warning) << "Height of cell (" << xi << ", " << yi <<
-                ") could not be requested, out of grid" << RTT::endlog();
-        return 0;
-    }
-}
-
-bool Task::setHeightMLS(size_t xi, size_t yi, double height) {
-    if(xi < mpNavGraphTravMap->xSize() && yi <  mpNavGraphTravMap->ySize()) {
-        mpMLSHeights[xi + yi * mpNavGraphTravMap->ySize()] = height;
-        return true;
-    }
-    RTT::log(RTT::Info) << "(" << xi << ", " << yi << ") is not located within the grid" << RTT::endlog();
-    return false;
-}
-
-/// The following lines are template definitions for the various state machine
-// hooks defined by Orocos::RTT. See Task.hpp for more detailed
-// documentation about them.
 
 bool Task::configureHook()
 {
@@ -199,7 +40,38 @@ bool Task::configureHook()
         return false;
     }
 
-    gettimeofday(&mLastReplan, 0);
+    //delete old mld grids
+    mMlsGrid.reset();
+    
+    //we did not get a map yet
+    mTraversabilityMapStatus = RTT::NoData;    
+    mLastReplanTime = base::Time();
+    
+    std::list<nav_graph_search::TerrainClass> classList;
+    nav_graph_search::TerrainClass unknown;
+    unknown.cost = 2;
+    unknown.out = 0;
+    unknown.name = "unknown";
+    nav_graph_search::TerrainClass obstacle;
+    obstacle.cost = -1;
+    obstacle.out = 1;
+    obstacle.name = "obstacle";
+
+    classList.push_back(unknown);
+    classList.push_back(obstacle);
+    
+    for(int i = 2; i < 255; i++)
+    {
+	nav_graph_search::TerrainClass c;
+	c.cost = 1+ i * 0.01 ;
+	c.out = i;
+	c.name = "Custom";
+	classList.push_back(c);
+    }
+    
+    delete mPlanner;
+    mPlanner = new nav_graph_search::DStarLite(classList);
+    
     return true;
 }
 
@@ -210,162 +82,254 @@ bool Task::configureHook()
 //     return true;
 // }
 
+
+RTT::FlowStatus Task::receiveEnvireData()
+{
+    envire::OrocosEmitter::Ptr binary_event;
+    RTT::FlowStatus ret;
+    ret = _envire_environment_in.read(binary_event);
+    if ((ret == RTT::NoData) || (ret == RTT::OldData))
+    {
+        return ret;
+    }
+
+    std::cout << "GOT MAP" << std::endl;
+    
+    static envire::Environment env;
+    env.applyEvents(*binary_event);   
+
+    std::vector<envire::TraversabilityGrid*> maps = env.getItems<envire::TraversabilityGrid>();
+    for(std::vector<envire::TraversabilityGrid*>::iterator it = maps.begin(); it != maps.end(); it++)
+    {
+	std::cout << "FOO Map id is " << (*it)->getUniqueId() <<std::endl;
+    }
+
+    
+    // Extract traversability map from evironment.
+    envire::TraversabilityGrid* traversability =
+            env.getItem< envire::TraversabilityGrid >(_traversability_map_id.get()).get();
+
+    if (!traversability)
+    {
+        RTT::log(RTT::Warning) << "No traversability map with ID " << 
+                _traversability_map_id.get() << RTT::endlog();
+        return mTraversabilityMapStatus;
+    } else {
+        RTT::log(RTT::Info) << "Traversability map with ID " << 
+                _traversability_map_id.get() << " extracted" << RTT::endlog();
+    }
+
+    mPlanner->updateTraversabilityMap(traversability);
+    
+    mTraversabilityGrid = traversability;
+    
+    try {
+	boost::intrusive_ptr<envire::MLSGrid> newMlsGrid = env.getItem< envire::MLSGrid >();
+	if(newMlsGrid)
+	{
+	    mMlsGrid = newMlsGrid;
+	}
+    }
+    catch (std::exception e)
+    {
+    }
+    
+    //set from NoData to OldData. this variable
+    //should only be used internaly in this function.
+    mTraversabilityMapStatus = RTT::OldData;
+    return RTT::NewData;
+}
+
+void Task::adjustTrajectoryHeight(std::vector< base::Vector3d >& trajectory)
+{
+    if(!mMlsGrid)
+	return;
+    
+    // Add z values if available, otherwise 0.
+    double lastHeight = mStartPos.z();
+    std::vector<base::Vector3d>::iterator it = trajectory.begin();
+    for(; it != trajectory.end(); ++it) {
+	envire::MLSGrid::const_iterator cIt = mMlsGrid->beginCell(it->x(), it->y());
+	
+	double minDiff = std::numeric_limits< double >::max();
+	double closestZ = base::unset<double>();
+	for(;cIt != mMlsGrid->endCell_const(); cIt++)
+	{
+	    double diff = fabs(lastHeight - cIt->getMaxZ());
+	    if(diff < minDiff)
+	    {
+		minDiff = diff;
+		closestZ = cIt->getMaxZ();
+	    }
+	}
+	
+	if(!base::isUnset<double>(closestZ))
+	{
+	    lastHeight = closestZ;
+	    it->z() = closestZ;
+	    RTT::log(RTT::Debug) << "Assign height " << closestZ << " to point (" <<
+		it->x() << ", " << it->y() << ")" <<  RTT::endlog(); 
+	} 
+	else
+	{
+	    RTT::log(RTT::Warning) << "Trajectoty contains out-of-grid point (" <<
+		it->x() << ", " << it->y() << ") " <<  RTT::endlog(); 		    
+	}
+    }
+}
+
+
+
 void Task::updateHook()
 {
+//     std::cout << "UPDATE " << std::endl;
     TaskBase::updateHook();
 
-    bool received_new_positions = false;
-    bool received_trav_update = false;
-
+    bool needsReplan = false;
     
-    if(!mInitialized) {
-        if(init()) {
-            mInitialized = true;    
-            received_trav_update = true;
-        } else {
-            return;
-        }
-    }
+    RTT::FlowStatus ret = receiveEnvireData();
+    if (ret == RTT::NoData)
+	return;
     
-    /**
-     * Just for testing:
-     * Reinitialises the complete planner in each updateHook using the complete
-     * received traversability map. This could fix the cant-find-path-problem.
-     * But the update interval has to be increased, at least 0.9 ( slightly lower than
-     * the send-environment-interval) 
-     */
-    /*
-    if(!init()) {
-        return;
-    } else {
-        //received_trav_update = true; // only the movement of the robot should initiiate planning
-        mPlanner->setStartPositionWorld(mStartPos);
-        mPlanner->setGoalPositionWorld(mGoalPos);
+    if (ret == RTT::NewData)
+    {
+	std::cout << "Got Map" << std::endl;
+
+	needsReplan = true;
     }
-    */
+
+    ret = _start_position_in.read(mStartPos);
+    if (ret == RTT::NoData)
+	return;
     
-
-    if (_start_position_in.read(mStartPos) == RTT::NewData)
+    if (ret == RTT::NewData)
     {
-        mPlanner->setStartPositionWorld(mStartPos);
-        mReceivedStartPos = received_new_positions = true;
+	std::cout << "Got start Position " << mStartPos.transpose() << std::endl;
+	needsReplan = true;
     }
 
-    if (_target_position_in.read(mGoalPos) == RTT::NewData)
+    ret = _target_position_in.read(mGoalPos);
+    if (ret == RTT::NoData)
+	return;
+    
+    if (ret == RTT::NewData)
     {
-        mPlanner->setGoalPositionWorld(mGoalPos);
-        mReceivedGoalPos = received_new_positions = true;
+	std::cout << "Got goal Position " << mGoalPos.transpose() << std::endl;
+	needsReplan = true;
+//         mPlanner->setGoalPositionWorld(mGoalPos);
     }
 
-    if (_robot_pose_in.read(mRobotPose) == RTT::NewData)
+    base::samples::RigidBodyState robotPose;
+    if (_robot_pose_in.read(robotPose) == RTT::NewData)
     {
-        mStartPos = mRobotPose.position;  
+        mStartPos = robotPose.position;  
         // Recalculate the trajectory if the distance exceeds a threshold
-        base::Vector3d p1 = mRobotPose.position;
-        base::Vector3d p2 = mPosLastRecalculation;
-        double distance = sqrt(pow(p1[0] - p2[0],2) + pow(p1[1] - p2[1],2) + pow(p1[2] - p2[2],2));
+        base::Vector3d p1 = robotPose.position;
+        base::Vector3d p2 = mLastStartPosition;
+	p1.z() = p2.z() = 0;
+	
+        double distance = (p1 -p2).norm();
         if(distance > _recalculate_trajectory_distance_threshold.get()) {  
-            mPlanner->setStartPositionWorld(mRobotPose.position);
-            mReceivedStartPos = received_new_positions = true;
             RTT::log(RTT::Info) << "Trajectory will be recalculated, distance to last position of recalculation (" <<
                     distance << ") exceeds threshold" << RTT::endlog();
+	    needsReplan = true;
         }
     }
 
     // Initiate replanning if the robot stucks 
-    bool replan_timeout = false;
-    timeval current_time;
-    gettimeofday(&current_time, 0);
-    int time_passed = (current_time.tv_sec - mLastReplan.tv_sec) * 1000 + 
-            (current_time.tv_usec - mLastReplan.tv_usec) / 1000;
-    if(time_passed > _replan_timeout_ms.get()) {
+    base::Time currentTime = base::Time::now();
+    if((currentTime - mLastReplanTime).toMilliseconds() > _replan_timeout_ms.get()) {
         RTT::log(RTT::Info) << "Replanning initiated, robot did not change its position for " << _replan_timeout_ms.get() << " msec" << RTT::endlog();
-        replan_timeout = true;
-        mLastReplan = current_time;
+	needsReplan = true;
     }    
 
     
-    pointcloud_creator::GridUpdate grid_update;
-    if (_traversability_update_in.read(grid_update) == RTT::NewData)
+    
+    
+//     pointcloud_creator::GridUpdate grid_update;
+//     if (_traversability_update_in.read(grid_update) == RTT::NewData)
+//     {
+//         base::Vector3d vec;
+//         for(unsigned int i=0; i < grid_update.mUpdatedPatches.size() && 
+//                 i < grid_update.mUpdatedClasses.size(); ++i) {
+//             vec = grid_update.mUpdatedPatches[i];
+//             int class_ = grid_update.mUpdatedClasses[i];
+//             mPlanner->updateCellEnvire(vec[0], vec[1], (uint8_t)class_);
+//             //Update height to be able to generate 3D trajectories.
+//             setHeightMLS((size_t)vec[0], (size_t)vec[1], vec[2]);
+//             //mpMLSHeights[vec[0] + vec[1] * mpNavGraphTravMap->ySize()] = vec[2];
+//         }
+//         mNumOfUpdatedPatches += grid_update.mUpdatedPatches.size();
+//         double updated_per = (mNumOfUpdatedPatches * 100) / (mpNavGraphTravMap->xSize() * mpNavGraphTravMap->ySize() * 1.0);
+//         if( updated_per > _recalculate_trajectory_patch_threshold.get() ) {
+//             RTT::log(RTT::Info) << "Trajectory will be recalculated, " << updated_per 
+//                     << "% of the patches have been updated" << RTT::endlog();
+//             received_trav_update = true;
+//             mNumOfUpdatedPatches = 0;
+//         }
+//     }
+    
+    if(needsReplan)
     {
-        base::Vector3d vec;
-        for(unsigned int i=0; i < grid_update.mUpdatedPatches.size() && 
-                i < grid_update.mUpdatedClasses.size(); ++i) {
-            vec = grid_update.mUpdatedPatches[i];
-            int class_ = grid_update.mUpdatedClasses[i];
-            mPlanner->updateCellEnvire(vec[0], vec[1], (uint8_t)class_);
-            //Update height to be able to generate 3D trajectories.
-            setHeightMLS((size_t)vec[0], (size_t)vec[1], vec[2]);
-            //mpMLSHeights[vec[0] + vec[1] * mpNavGraphTravMap->ySize()] = vec[2];
-        }
-        mNumOfUpdatedPatches += grid_update.mUpdatedPatches.size();
-        double updated_per = (mNumOfUpdatedPatches * 100) / (mpNavGraphTravMap->xSize() * mpNavGraphTravMap->ySize() * 1.0);
-        if( updated_per > _recalculate_trajectory_patch_threshold.get() ) {
-            RTT::log(RTT::Info) << "Trajectory will be recalculated, " << updated_per 
-                    << "% of the patches have been updated" << RTT::endlog();
-            received_trav_update = true;
-            mNumOfUpdatedPatches = 0;
-        }
-    }
+	std::cout << "Planning" << std::endl;
+
+// 	mPlanner->setStartPositionWorld(mStartPos);
     
+	size_t startX, startY, endX, endY;
 
-    if(mReceivedStartPos && mReceivedGoalPos) {
-        if(received_new_positions || received_trav_update || replan_timeout) {
-            //mPlanner->printInformations();
-            if(!mPlanner->calculateTrajectory()) {
-                RTT::log(RTT::Warning) << "Trajectory could not be calculated" << RTT::endlog();
-                //mPosLastRecalculation = mRobotPose.position; // Prevents recalculation during every update loop.
-            } else {
-                std::vector<base::Vector3d> trajectory = mPlanner->getTrajectory();
-                // Add z values if available, otherwise 0.
-                size_t xi = 0, yi =0;
-                base::Vector3d v;
-                std::vector<base::Vector3d>::iterator it = trajectory.begin();
-                for(; it != trajectory.end(); ++it) {
-                    v = *it;
-                    // Convert trajectory waypoint from world to local again.
-                    if(mPlanner->toLocal(v[0], v[1], xi, yi)) {
-                        (*it)[2] = getHeightMLS(xi, yi) + 0.1; // Assign height to the vector + 0.1
-                        RTT::log(RTT::Debug) << "Assign height " << (*it)[2] << " to point (" <<
-                            v[0] << ", " << v[1] << ")" <<  RTT::endlog(); 
-                    } else {
-                        RTT::log(RTT::Warning) << "Trajectoty contains out-of-grid point (" <<
-                            v[0] << ", " << v[1] << "), patch is (" << xi << ", " << yi << ")" <<  RTT::endlog(); 
-                    }
-                }
-                _trajectory_out.write(trajectory);
+	if(!mTraversabilityGrid->toGrid(mStartPos, startX, startY))
+	    throw std::runtime_error("Error start is not in map");
 
-                std::stringstream oss;
-                oss << "Calculated trajectory: " << std::endl;
-                for(unsigned int i = 0; i < trajectory.size(); ++i) {
-                    base::Vector3d p = trajectory[i];
-                    oss << "(" << p[0] << ", " << p[1] << ", " << p[2] << ") ";
-                }
-                oss << std::endl;
-                RTT::log(RTT::Info) << oss.str() << RTT::endlog();
-    
-                // Convert to a spline trajectory and output to port.
-                std::vector<base::geometry::Spline<3>::vector_t> trajectory_spline;
-                for(unsigned int i = 0; i < trajectory.size(); ++i) {
-                    base::Vector3d p = trajectory[i];
-                    base::geometry::Spline<3>::vector_t v_t(p[0], p[1], p[2]);
-                    trajectory_spline.push_back(v_t);
-                }
+	if(!mTraversabilityGrid->toGrid(mGoalPos, endX, endY))
+	    throw std::runtime_error("Error goal is not in map");
 
-                base::Trajectory base_trajectory;
-                base_trajectory.speed = 0.06; // set m/s.
-                base_trajectory.spline.interpolate(trajectory_spline);
+	if(mPlanner->run(startX, startY, endX, endY))
+	{
+	    
+	    std::vector<Eigen::Vector2i> trajectoryGrid = mPlanner->getLocalTrajectory();
+	    std::vector<base::Vector3d> trajectory;
+	    
+	    for(std::vector<Eigen::Vector2i>::iterator it = trajectoryGrid.begin(); it != trajectoryGrid.end(); it++)
+	    {
+		trajectory.push_back(mTraversabilityGrid->fromGrid(it->x(), it->y()));
+	    }
+	    
+	    if(mMlsGrid)
+		adjustTrajectoryHeight(trajectory);
 
-                // Stuff it in a vector (it's possible to send several trajectories
-                // which would be completed consecutively)
-                std::vector<base::Trajectory> base_trajectory_vector;
-                base_trajectory_vector.push_back(base_trajectory);
-                _trajectory_spline_out.write(base_trajectory_vector);
+	    _trajectory_out.write(trajectory);
 
-                // Store the recalculated-trajectory-position.
-                mPosLastRecalculation = mRobotPose.position;
-            }
-        }
+	    std::stringstream oss;
+	    oss << "Calculated trajectory: " << std::endl;
+	    for(unsigned int i = 0; i < trajectory.size(); ++i) {
+		oss << "(" << trajectory[i].transpose() << ") ";
+	    }
+	    oss << std::endl;
+	    RTT::log(RTT::Info) << oss.str() << RTT::endlog();
+	    std::cout << oss.str() << std::endl;
+
+	    base::Trajectory base_trajectory;
+	    base_trajectory.speed = 0.06; // set m/s.
+	    base_trajectory.spline.interpolate(trajectory);
+
+	    // Stuff it in a vector (it's possible to send several trajectories
+	    // which would be completed consecutively)
+	    std::vector<base::Trajectory> base_trajectory_vector;
+	    base_trajectory_vector.push_back(base_trajectory);
+	    _trajectory_spline_out.write(base_trajectory_vector);
+
+	    // Store the recalculated-trajectory-position.
+	    mLastStartPosition = mStartPos;
+	    
+	}
+	else
+	{
+	    std::cout << "Trajectory could not be calculated" << std::endl;
+	    RTT::log(RTT::Warning) << "Trajectory could not be calculated" << RTT::endlog();
+	}
+	
+	std::cout << "Planning Done" << std::endl;
+	mLastReplanTime = currentTime;
     }
 }
 

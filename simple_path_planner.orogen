@@ -5,7 +5,6 @@ name "simple_path_planner"
 using_library "simple_path_planner"
 using_library "envire"
 import_types_from "base"
-import_types_from "pointcloud_creator"
 import_types_from "envire"	
 
 task_context "Task" do
@@ -48,9 +47,6 @@ task_context "Task" do
 
     input_port("robot_pose_in", "base/samples/RigidBodyState").
         doc "Position and orientation of the robot in the world, can be used to set the start position as well"
-
-    input_port('traversability_update_in', '/pointcloud_creator/GridUpdate').
-        doc "Contains the new values of all changed patches"
 
     # Output
     output_port('trajectory_out', '/std/vector<base::Vector3d>').
