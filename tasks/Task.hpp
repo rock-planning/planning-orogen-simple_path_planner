@@ -55,8 +55,9 @@ namespace simple_path_planner {
 	 */
 	RTT::FlowStatus mTraversabilityMapStatus;
 	///the last received traversability grid
-	envire::Grid<uint8_t> *mTraversabilityGrid;
-	envire::Environment *env;
+        envire::TraversabilityGrid::Ptr mTraversabilityGrid;
+        envire::FrameNode::Ptr mTraversabilityGridFrame;
+	envire::Environment *mEnv;
 	
 	///time of the last planning
 	base::Time mLastReplanTime;

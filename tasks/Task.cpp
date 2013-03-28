@@ -71,6 +71,8 @@ bool Task::configureHook()
     delete mPlanner;
     mPlanner = new nav_graph_search::DStarLite(classList);
     
+    mEnv = new envire::Environment();
+    
     return true;
 }
 
@@ -85,8 +87,13 @@ bool Task::configureHook()
 RTT::FlowStatus Task::receiveEnvireData()
 {
     envire::OrocosEmitter::Ptr binary_event;
-    RTT::FlowStatus ret;
-    ret = _envire_environment_in.read(binary_event);
+    RTT::FlowStatus ret = mTraversabilityMapStatus;
+    while(_envire_environment_in.read(binary_event) == RTT::NewData)
+    {
+        ret = RTT::NewData;
+        mEnv->applyEvents(*binary_event);   
+    }
+    
     if ((ret == RTT::NoData) || (ret == RTT::OldData))
     {
         return ret;
@@ -94,10 +101,7 @@ RTT::FlowStatus Task::receiveEnvireData()
 
     std::cout << "GOT MAP" << std::endl;
     
-    static envire::Environment env;
-    env.applyEvents(*binary_event);   
-
-    std::vector<envire::TraversabilityGrid*> maps = env.getItems<envire::TraversabilityGrid>();
+    std::vector<envire::TraversabilityGrid*> maps = mEnv->getItems<envire::TraversabilityGrid>();
     for(std::vector<envire::TraversabilityGrid*>::iterator it = maps.begin(); it != maps.end(); it++)
     {
 	std::cout << "FOO Map id is " << (*it)->getUniqueId() <<std::endl;
@@ -105,8 +109,8 @@ RTT::FlowStatus Task::receiveEnvireData()
 
     
     // Extract traversability map from evironment.
-    envire::TraversabilityGrid* traversability =
-            env.getItem< envire::TraversabilityGrid >(_traversability_map_id.get()).get();
+    envire::TraversabilityGrid *traversability =
+            mEnv->getItem< envire::TraversabilityGrid >(_traversability_map_id.get()).get();
 
     if (!traversability)
     {
@@ -116,14 +120,30 @@ RTT::FlowStatus Task::receiveEnvireData()
     } else {
         RTT::log(RTT::Info) << "Traversability map with ID " << 
                 _traversability_map_id.get() << " extracted" << RTT::endlog();
+
+        mPlanner->updateTraversabilityMap(traversability, mTraversabilityGrid.get());
+
+        if(mTraversabilityGrid)
+        {
+            envire::FrameNode *lastGridFrame = mTraversabilityGrid->getFrameNode();
+            mEnv->detachFrameNode(mTraversabilityGrid.get(), lastGridFrame);
+            mEnv->detachItem(mTraversabilityGrid.get());
+            mEnv->detachItem(lastGridFrame);
+        }
+        
+        mTraversabilityGrid = traversability;
+        envire::FrameNode *gridFrame = mTraversabilityGrid->getFrameNode();
+        mEnv->detachFrameNode(mTraversabilityGrid.get(), gridFrame);
+        envire::EnvironmentItem::Ptr trGrid = mEnv->detachItem(mTraversabilityGrid.get());
+        mTraversabilityGrid->setUniqueId("lastTrGrid");
+        
+        mEnv->attachItem(mTraversabilityGrid.get(), gridFrame);
+
     }
 
-    mPlanner->updateTraversabilityMap(traversability);
-    
-    mTraversabilityGrid = traversability;
     
     try {
-	boost::intrusive_ptr<envire::MLSGrid> newMlsGrid = env.getItem< envire::MLSGrid >();
+	boost::intrusive_ptr<envire::MLSGrid> newMlsGrid = mEnv->getItem< envire::MLSGrid >();
 	if(newMlsGrid)
 	{
 	    mMlsGrid = newMlsGrid;
