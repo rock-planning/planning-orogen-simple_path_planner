@@ -5,7 +5,6 @@
 
 #include "simple_path_planner/TaskBase.hpp"
 
-#include "simple_path_planner/SimplePathPlanner.hpp"
 #include <nav_graph_search/dstar_lite.hpp>
 
 #include <sys/time.h>

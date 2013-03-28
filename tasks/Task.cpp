@@ -5,7 +5,6 @@
 #include <nav_graph_search/terrain_classes.hpp>
 #include <envire/Orocos.hpp>
 #include <envire/maps/MLSGrid.hpp>
-#include <simple_path_planner/SimplePathPlanner.hpp>
 
 using namespace simple_path_planner;
 
