@@ -2,8 +2,8 @@ name "simple_path_planner"
 # Optionally declare the version number
 # version "0.1"
 
-using_library "simple_path_planner"
 using_library "envire"
+using_library "nav_graph_search"
 import_types_from "base"
 import_types_from "envire"	
 
