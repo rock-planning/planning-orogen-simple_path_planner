@@ -5,6 +5,7 @@
 #include <nav_graph_search/terrain_classes.hpp>
 #include <envire/Orocos.hpp>
 #include <envire/maps/MLSGrid.hpp>
+#include <iterator>
 
 using namespace simple_path_planner;
 
@@ -138,7 +139,6 @@ RTT::FlowStatus Task::receiveEnvireData()
         mTraversabilityGrid->setUniqueId("lastTrGrid");
         
         mEnv->attachItem(mTraversabilityGrid.get(), gridFrame);
-
     }
 
     
@@ -159,49 +159,8 @@ RTT::FlowStatus Task::receiveEnvireData()
     return RTT::NewData;
 }
 
-void Task::adjustTrajectoryHeight(std::vector< base::Vector3d >& trajectory)
-{
-    if(!mMlsGrid)
-	return;
-    
-    // Add z values if available, otherwise 0.
-    double lastHeight = mStartPos.z();
-    std::vector<base::Vector3d>::iterator it = trajectory.begin();
-    for(; it != trajectory.end(); ++it) {
-	envire::MLSGrid::const_iterator cIt = mMlsGrid->beginCell(it->x(), it->y());
-	
-	double minDiff = std::numeric_limits< double >::max();
-	double closestZ = base::unset<double>();
-	for(;cIt != mMlsGrid->endCell_const(); cIt++)
-	{
-	    double diff = fabs(lastHeight - cIt->getMaxZ());
-	    if(diff < minDiff)
-	    {
-		minDiff = diff;
-		closestZ = cIt->getMaxZ();
-	    }
-	}
-	
-	if(!base::isUnset<double>(closestZ))
-	{
-	    lastHeight = closestZ;
-	    it->z() = closestZ;
-	    RTT::log(RTT::Debug) << "Assign height " << closestZ << " to point (" <<
-		it->x() << ", " << it->y() << ")" <<  RTT::endlog(); 
-	} 
-	else
-	{
-	    RTT::log(RTT::Warning) << "Trajectoty contains out-of-grid point (" <<
-		it->x() << ", " << it->y() << ") " <<  RTT::endlog(); 		    
-	}
-    }
-}
-
-
-
 void Task::updateHook()
 {
-//     std::cout << "UPDATE " << std::endl;
     TaskBase::updateHook();
 
     bool needsReplan = false;
@@ -235,7 +194,6 @@ void Task::updateHook()
     {
 	std::cout << "Got goal Position " << mGoalPos.transpose() << std::endl;
 	needsReplan = true;
-//         mPlanner->setGoalPositionWorld(mGoalPos);
     }
 
     base::samples::RigidBodyState robotPose;
@@ -262,38 +220,10 @@ void Task::updateHook()
 	needsReplan = true;
     }    
 
-    
-    
-    
-//     pointcloud_creator::GridUpdate grid_update;
-//     if (_traversability_update_in.read(grid_update) == RTT::NewData)
-//     {
-//         base::Vector3d vec;
-//         for(unsigned int i=0; i < grid_update.mUpdatedPatches.size() && 
-//                 i < grid_update.mUpdatedClasses.size(); ++i) {
-//             vec = grid_update.mUpdatedPatches[i];
-//             int class_ = grid_update.mUpdatedClasses[i];
-//             mPlanner->updateCellEnvire(vec[0], vec[1], (uint8_t)class_);
-//             //Update height to be able to generate 3D trajectories.
-//             setHeightMLS((size_t)vec[0], (size_t)vec[1], vec[2]);
-//             //mpMLSHeights[vec[0] + vec[1] * mpNavGraphTravMap->ySize()] = vec[2];
-//         }
-//         mNumOfUpdatedPatches += grid_update.mUpdatedPatches.size();
-//         double updated_per = (mNumOfUpdatedPatches * 100) / (mpNavGraphTravMap->xSize() * mpNavGraphTravMap->ySize() * 1.0);
-//         if( updated_per > _recalculate_trajectory_patch_threshold.get() ) {
-//             RTT::log(RTT::Info) << "Trajectory will be recalculated, " << updated_per 
-//                     << "% of the patches have been updated" << RTT::endlog();
-//             received_trav_update = true;
-//             mNumOfUpdatedPatches = 0;
-//         }
-//     }
-    
     if(needsReplan)
     {
 	std::cout << "Planning" << std::endl;
 
-// 	mPlanner->setStartPositionWorld(mStartPos);
-    
 	size_t startX, startY, endX, endY;
 
 	if(!mTraversabilityGrid->toGrid(mStartPos, startX, startY))
@@ -306,26 +236,46 @@ void Task::updateHook()
 	{
 	    
 	    std::vector<Eigen::Vector2i> trajectoryGrid = mPlanner->getLocalTrajectory();
-	    std::vector<base::Vector3d> trajectory;
+	    std::vector<envire::GridBase::Position> trajectoryMlsGrid;
+            std::vector<base::Vector3d> trajectory;
 	    
 	    for(std::vector<Eigen::Vector2i>::iterator it = trajectoryGrid.begin(); it != trajectoryGrid.end(); it++)
 	    {
-		trajectory.push_back(mTraversabilityGrid->fromGrid(it->x(), it->y()));
+                const Eigen::Vector3d p = mTraversabilityGrid->fromGrid(it->x(), it->y());
+                envire::GridBase::Position gridPos;
+                if(mMlsGrid)
+                {
+                    if(mMlsGrid->toGrid(p, gridPos.x, gridPos.y))
+                        trajectoryMlsGrid.push_back(gridPos);
+                    else
+                        std::cout << "Warning Trajectory is outside of MLSGrid this ist most probably a bug" << std::endl;    
+                }
+                trajectory.push_back(p);
 	    }
-	    
-	    if(mMlsGrid)
-		adjustTrajectoryHeight(trajectory);
-
-	    _trajectory_out.write(trajectory);
 
 	    std::stringstream oss;
-	    oss << "Calculated trajectory: " << std::endl;
-	    for(unsigned int i = 0; i < trajectory.size(); ++i) {
-		oss << "(" << trajectory[i].transpose() << ") ";
-	    }
-	    oss << std::endl;
-	    RTT::log(RTT::Info) << oss.str() << RTT::endlog();
-	    std::cout << oss.str() << std::endl;
+            oss << "Calculated trajectory: " << std::endl;
+            for(unsigned int i = 0; i < trajectory.size(); ++i) {
+                oss << "(" << trajectory[i].transpose() << ") ";
+            }
+            oss << std::endl;
+            RTT::log(RTT::Info) << oss.str() << RTT::endlog();
+            std::cout << oss.str() << std::endl;
+	    
+            if(mMlsGrid)            
+            {
+                std::vector<Eigen::Vector3d> pTrajectory = mMlsGrid->projectPointsOnSurface(mStartPos.z(), trajectoryMlsGrid, _trajectory_z_offset.get());
+                trajectory.clear();
+                for(std::vector<Eigen::Vector3d>::const_iterator it = pTrajectory.begin(); it != pTrajectory.end();it++)
+                {
+                    double x, y;
+                    mMlsGrid->fromGrid(it->x(), it->y(), x, y);
+                    trajectory.push_back(base::Vector3d(x,y, it->z()));
+                }
+            }
+            
+	    _trajectory_out.write(trajectory);
+
 
 	    base::Trajectory base_trajectory;
 	    base_trajectory.speed = 0.06; // set m/s.
@@ -351,17 +301,3 @@ void Task::updateHook()
 	mLastReplanTime = currentTime;
     }
 }
-
-// void Task::errorHook()
-// {
-//     TaskBase::errorHook();
-// }
-// void Task::stopHook()
-// {
-//     TaskBase::stopHook();
-// }
-// void Task::cleanupHook()
-// {
-//     TaskBase::cleanupHook();
-// }
-

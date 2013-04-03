@@ -36,9 +36,6 @@ namespace simple_path_planner {
 	///Optional mls grid for trajectory height adjustment
 	boost::intrusive_ptr<envire::MLSGrid> mMlsGrid;
 	
-	///The path planner
-//         SimplePathPlanner* mPlanner;
-	
 	nav_graph_search::DStarLite *mPlanner;
 	
 	///Current start position
@@ -64,31 +61,13 @@ namespace simple_path_planner {
 	///start position of last planning 
 	base::Vector3d mLastStartPosition;
 
-        /**
-         * Does the following initializations:\n
-         * 1. Tries to receive a envire::Environment on port 'traversability_map_in'.\n
-         * 2. Extracts the envire traversability map.
-         * 3. Loads or creates the terrain classes.
-         * 4. Loads the trav. map into nav_graph_search.
-         * 5. Creates the SimplePathPlanner object.
-         */
-        bool init();
-
-	/**
-	 * This function adjustes the Z values of the given trajectory,
-	 * so that the trajectory is on the Surface of the MLS-Grid.
-	 * */
-	void adjustTrajectoryHeight(std::vector<base::Vector3d> &trajectory);
-	
 	/**
 	 * This function receives the traversability grid
 	 * and (if send) an mlsGrid.
 	 * 
 	 * It returns weather a new traversability grid is there / was received.
 	 * */
-	RTT::FlowStatus receiveEnvireData();
-	
-	void computeTraversabilityDiff(envire::Grid<uint8_t>* newGrid);
+	RTT::FlowStatus receiveEnvireData();	
     public:
         /** TaskContext constructor for Task
          * \param name Name of the task. This name needs to be unique to make it identifiable via nameservices.
