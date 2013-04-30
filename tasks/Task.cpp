@@ -181,7 +181,7 @@ double Task::getHeightMLS(size_t xi, size_t yi) {
 }
 
 bool Task::setHeightMLS(size_t xi, size_t yi, double height) {
-    if(xi < mpNavGraphTravMap->xSize() && yi <  mpNavGraphTravMap->ySize()) {
+    if(xi < (size_t)mpNavGraphTravMap->xSize() && yi <  (size_t)mpNavGraphTravMap->ySize()) {
         mpMLSHeights[xi + yi * mpNavGraphTravMap->ySize()] = height;
         return true;
     }
