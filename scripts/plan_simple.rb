@@ -26,7 +26,7 @@ Orocos.run 'envire::SynchronizationTransmitter' => 'transmitter',
     traversability.traversability_map.connect_to(planner.envire_environment_in)
 
     #optional for height adjusted trajectories
-#     transmitter.envire_events.connect_to(planner.envire_environment_in)
+    transmitter.envire_events.connect_to(planner.envire_environment_in)
     
     transmitter.configure()
     traversability.configure()
@@ -52,9 +52,6 @@ Orocos.run 'envire::SynchronizationTransmitter' => 'transmitter',
     stop_writer.write(stop_pos)
     
     transmitter.loadEnvironment('dlr.env')
-
-
-    
     Readline::readline("Press ENTER to exit\n") do
     end 
 end
