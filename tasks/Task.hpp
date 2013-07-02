@@ -52,7 +52,7 @@ class Task : public TaskBase
      * This function receives the traversability grid
      * and (if send) an mlsGrid.
      * 
-     * It returns weather a new traversability grid is there / was received.
+     * Returns whether a new traversability grid is available / has been received.
      */
     RTT::FlowStatus receiveEnvireData();
     

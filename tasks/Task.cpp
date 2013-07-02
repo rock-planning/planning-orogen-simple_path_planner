@@ -40,16 +40,23 @@ bool Task::configureHook()
         return false;
     }
 
-    //delete old mld grids
+    // Delete old mls grids.
     mMlsGrid.reset();
     
-    //we did not get a map yet
+    // We did not get a map yet.
     mTraversabilityMapStatus = RTT::NoData;    
     mLastReplanTime = base::Time();
 
+    // Try to load the terrain classes.
     std::list<nav_graph_search::TerrainClass> classList;
+    try {
+        classList = nav_graph_search::TerrainClass::load(_terrain_classes_path.get());
+    } catch (std::runtime_error& e) {
+        RTT::log(RTT::Warning) << e.what() << ", default terrain classes will be used instead" << RTT::endlog();
+    }
+
     nav_graph_search::TerrainClass unknown;
-    unknown.cost = 2;
+    unknown.cost = 1.5;
     unknown.out = 0;
     unknown.name = "unknown";
     nav_graph_search::TerrainClass obstacle;
@@ -60,12 +67,13 @@ bool Task::configureHook()
     classList.push_back(unknown);
     classList.push_back(obstacle);
     
-    for(int i = 2; i < 255; i++)
+    // Costs of 2 to 1.
+    for(int i = 2; i < 13; i++)
     {
         nav_graph_search::TerrainClass c;
-        c.cost = 1+ i * 0.01 ;
+        c.cost = 2 - (i-2) / 10.0;  // 1 + i * 0.01 ;
         c.out = i;
-        c.name = "Custom";
+        c.name = "slope";
         classList.push_back(c);
     }
     
@@ -84,7 +92,6 @@ bool Task::configureHook()
 //     return true;
 // }
 
-
 RTT::FlowStatus Task::receiveEnvireData()
 {
     envire::OrocosEmitter::Ptr binary_event;
@@ -100,12 +107,12 @@ RTT::FlowStatus Task::receiveEnvireData()
         return ret;
     }
 
-    std::cout << "GOT MAP" << std::endl;
+    RTT::log(RTT::Info) << "Received map" << RTT::endlog();
 
     std::vector<envire::TraversabilityGrid*> maps = mEnv->getItems<envire::TraversabilityGrid>();
     for(std::vector<envire::TraversabilityGrid*>::iterator it = maps.begin(); it != maps.end(); it++)
     {
-        std::cout << "FOO Map id is " << (*it)->getUniqueId() <<std::endl;
+        RTT::log(RTT::Info) << "Map id is " << (*it)->getUniqueId() << RTT::endlog();
     }
 
 
@@ -141,19 +148,16 @@ RTT::FlowStatus Task::receiveEnvireData()
         mEnv->attachItem(mTraversabilityGrid.get(), gridFrame);
     }
 
-
     try {
         boost::intrusive_ptr<envire::MLSGrid> newMlsGrid = mEnv->getItem< envire::MLSGrid >();
-    if(newMlsGrid)
-    {
-        mMlsGrid = newMlsGrid;
-    }
-    }
-    catch (std::exception e)
-    {
+        if(newMlsGrid)
+        {
+            mMlsGrid = newMlsGrid;
+        }
+    } catch (std::exception e) {
     }
 
-    //set from NoData to OldData. this variable
+    //set from NoData to OldData. This variable
     //should only be used internaly in this function.
     mTraversabilityMapStatus = RTT::OldData;
     return RTT::NewData;
@@ -223,7 +227,7 @@ void Task::updateHook()
     }    
 
     if(needsReplan) {
-        std::cout << "Planning" << std::endl;
+        RTT::log(RTT::Info) << "Planning" << RTT::endlog();
 
         size_t startX, startY, endX, endY;
 
@@ -237,7 +241,6 @@ void Task::updateHook()
 
         if(mPlanner->run(startX, startY, endX, endY))
         {
-            
             std::vector<Eigen::Vector2i> trajectoryGrid = mPlanner->getLocalTrajectory();
             std::vector<envire::GridBase::Position> trajectoryMlsGrid;
                 std::vector<base::Vector3d> trajectory;
@@ -291,15 +294,14 @@ void Task::updateHook()
             _trajectory_spline_out.write(base_trajectory_vector);
 
             // Store the recalculated-trajectory-position.
-            mLastStartPosition = mStartPos; 
+            mLastStartPosition = mStartPos;
         }
         else
         {
-            std::cout << "Trajectory could not be calculated" << std::endl;
             RTT::log(RTT::Warning) << "Trajectory could not be calculated" << RTT::endlog();
         }
 
-        std::cout << "Planning Done" << std::endl;
+        RTT::log(RTT::Info) << "Planning Done" << RTT::endlog();
         mLastReplanTime = currentTime;
     }
 }
