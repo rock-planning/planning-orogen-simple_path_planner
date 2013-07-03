@@ -26,7 +26,7 @@ Orocos.run 'envire::SynchronizationTransmitter' => 'transmitter',
     traversability.traversability_map.connect_to(planner.envire_environment_in)
 
     #optional for height adjusted trajectories
-    transmitter.envire_events.connect_to(planner.envire_environment_in)
+    #transmitter.envire_events.connect_to(planner.envire_environment_in)
     
     transmitter.configure()
     traversability.configure()

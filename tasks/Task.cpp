@@ -51,31 +51,36 @@ bool Task::configureHook()
     std::list<nav_graph_search::TerrainClass> classList;
     try {
         classList = nav_graph_search::TerrainClass::load(_terrain_classes_path.get());
+        if(classList.empty()) {
+            throw std::runtime_error("terrain class list empty");
+        }
     } catch (std::runtime_error& e) {
         RTT::log(RTT::Warning) << e.what() << ", default terrain classes will be used instead" << RTT::endlog();
+
+        nav_graph_search::TerrainClass unknown;
+        unknown.cost = 1.5;
+        unknown.out = 0;
+        unknown.name = "unknown";
+        nav_graph_search::TerrainClass obstacle;
+        obstacle.cost = -1;
+        obstacle.out = 1;
+        obstacle.name = "obstacle";
+
+        classList.push_back(unknown);
+        classList.push_back(obstacle);
+        
+        // Costs of 2 to 1.
+        for(int i = 2; i < 13; i++)
+        {
+            nav_graph_search::TerrainClass c;
+            c.cost = 2 - (i-2) / 10.0;  // 1 + i * 0.01 ;
+            c.out = i;
+            c.name = "slope";
+            classList.push_back(c);
+        }
     }
-
-    nav_graph_search::TerrainClass unknown;
-    unknown.cost = 1.5;
-    unknown.out = 0;
-    unknown.name = "unknown";
-    nav_graph_search::TerrainClass obstacle;
-    obstacle.cost = -1;
-    obstacle.out = 1;
-    obstacle.name = "obstacle";
-
-    classList.push_back(unknown);
-    classList.push_back(obstacle);
     
-    // Costs of 2 to 1.
-    for(int i = 2; i < 13; i++)
-    {
-        nav_graph_search::TerrainClass c;
-        c.cost = 2 - (i-2) / 10.0;  // 1 + i * 0.01 ;
-        c.out = i;
-        c.name = "slope";
-        classList.push_back(c);
-    }
+    RTT::log(RTT::Info) << nav_graph_search::TerrainClass::toString(classList) << RTT::endlog();
     
     delete mPlanner;
     mPlanner = new nav_graph_search::DStarLite(classList);
@@ -107,47 +112,53 @@ RTT::FlowStatus Task::receiveEnvireData()
         return ret;
     }
 
-    RTT::log(RTT::Info) << "Received map" << RTT::endlog();
+    RTT::log(RTT::Info) << "Received map(s): " << RTT::endlog();
 
     std::vector<envire::TraversabilityGrid*> maps = mEnv->getItems<envire::TraversabilityGrid>();
+    std::string trav_map_id;
     for(std::vector<envire::TraversabilityGrid*>::iterator it = maps.begin(); it != maps.end(); it++)
     {
-        RTT::log(RTT::Info) << "Map id is " << (*it)->getUniqueId() << RTT::endlog();
+        trav_map_id = (*it)->getUniqueId();
+        RTT::log(RTT::Info) << "Traversability map id: " << trav_map_id << RTT::endlog();
     }
-
 
     // Extract traversability map from evironment.
     envire::TraversabilityGrid *traversability =
             mEnv->getItem< envire::TraversabilityGrid >(_traversability_map_id.get()).get();
-
+ 
     if (!traversability)
     {
-        RTT::log(RTT::Warning) << "No traversability map with ID " << 
-                _traversability_map_id.get() << RTT::endlog();
-        return mTraversabilityMapStatus;
-    } else {
-        RTT::log(RTT::Info) << "Traversability map with ID " << 
-                _traversability_map_id.get() << " extracted" << RTT::endlog();
-
-        mPlanner->updateTraversabilityMap(traversability, mTraversabilityGrid.get());
-
-        if(mTraversabilityGrid)
-        {
-            envire::FrameNode *lastGridFrame = mTraversabilityGrid->getFrameNode();
-            mEnv->detachFrameNode(mTraversabilityGrid.get(), lastGridFrame);
-            mEnv->detachItem(mTraversabilityGrid.get());
-            mEnv->detachItem(lastGridFrame);
+        RTT::log(RTT::Warning) << "No traversability map with ID '" << 
+                _traversability_map_id.get() << "'" << RTT::endlog();
+                
+        if(maps.size() == 1) {
+            RTT::log(RTT::Warning) << "Did you mean '" << trav_map_id << 
+                    "' instead?" << RTT::endlog();
         }
-        
-        mTraversabilityGrid = traversability;
-        envire::FrameNode *gridFrame = mTraversabilityGrid->getFrameNode();
-        mEnv->detachFrameNode(mTraversabilityGrid.get(), gridFrame);
-        envire::EnvironmentItem::Ptr trGrid = mEnv->detachItem(mTraversabilityGrid.get());
-        mTraversabilityGrid->setUniqueId("lastTrGrid");
-        
-        mEnv->attachItem(mTraversabilityGrid.get(), gridFrame);
-    }
+        return mTraversabilityMapStatus;
+    } 
+    
+    RTT::log(RTT::Info) << "Traversability map with ID " << 
+            _traversability_map_id.get() << " extracted" << RTT::endlog();
 
+    mPlanner->updateTraversabilityMap(traversability, mTraversabilityGrid.get());
+
+    if(mTraversabilityGrid)
+    {
+        envire::FrameNode *lastGridFrame = mTraversabilityGrid->getFrameNode();
+        mEnv->detachFrameNode(mTraversabilityGrid.get(), lastGridFrame);
+        mEnv->detachItem(mTraversabilityGrid.get());
+        mEnv->detachItem(lastGridFrame);
+    }
+    
+    mTraversabilityGrid = traversability;
+    envire::FrameNode *gridFrame = mTraversabilityGrid->getFrameNode();
+    mEnv->detachFrameNode(mTraversabilityGrid.get(), gridFrame);
+    envire::EnvironmentItem::Ptr trGrid = mEnv->detachItem(mTraversabilityGrid.get());
+    mTraversabilityGrid->setUniqueId("lastTrGrid");
+    
+    mEnv->attachItem(mTraversabilityGrid.get(), gridFrame);
+    
     try {
         boost::intrusive_ptr<envire::MLSGrid> newMlsGrid = mEnv->getItem< envire::MLSGrid >();
         if(newMlsGrid)
