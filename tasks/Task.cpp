@@ -97,89 +97,13 @@ bool Task::configureHook()
 //     return true;
 // }
 
-RTT::FlowStatus Task::receiveEnvireData()
-{
-    envire::OrocosEmitter::Ptr binary_event;
-    RTT::FlowStatus ret = mTraversabilityMapStatus;
-    while(_envire_environment_in.read(binary_event) == RTT::NewData)
-    {
-        ret = RTT::NewData;
-        mEnv->applyEvents(*binary_event);   
-    }
-
-    if ((ret == RTT::NoData) || (ret == RTT::OldData))
-    {
-        return ret;
-    }
-
-    RTT::log(RTT::Info) << "Received map(s): " << RTT::endlog();
-
-    std::vector<envire::TraversabilityGrid*> maps = mEnv->getItems<envire::TraversabilityGrid>();
-    std::string trav_map_id;
-    for(std::vector<envire::TraversabilityGrid*>::iterator it = maps.begin(); it != maps.end(); it++)
-    {
-        trav_map_id = (*it)->getUniqueId();
-        RTT::log(RTT::Info) << "Traversability map id: " << trav_map_id << RTT::endlog();
-    }
-
-    // Extract traversability map from evironment.
-    envire::TraversabilityGrid *traversability =
-            mEnv->getItem< envire::TraversabilityGrid >(_traversability_map_id.get()).get();
- 
-    if (!traversability)
-    {
-        RTT::log(RTT::Warning) << "No traversability map with ID '" << 
-                _traversability_map_id.get() << "'" << RTT::endlog();
-                
-        if(maps.size() == 1) {
-            RTT::log(RTT::Warning) << "Did you mean '" << trav_map_id << 
-                    "' instead?" << RTT::endlog();
-        }
-        return mTraversabilityMapStatus;
-    } 
-    
-    RTT::log(RTT::Info) << "Traversability map with ID " << 
-            _traversability_map_id.get() << " extracted" << RTT::endlog();
-
-    mPlanner->updateTraversabilityMap(traversability, mTraversabilityGrid.get());
-
-    if(mTraversabilityGrid)
-    {
-        envire::FrameNode *lastGridFrame = mTraversabilityGrid->getFrameNode();
-        mEnv->detachFrameNode(mTraversabilityGrid.get(), lastGridFrame);
-        mEnv->detachItem(mTraversabilityGrid.get());
-        mEnv->detachItem(lastGridFrame);
-    }
-    
-    mTraversabilityGrid = traversability;
-    envire::FrameNode *gridFrame = mTraversabilityGrid->getFrameNode();
-    mEnv->detachFrameNode(mTraversabilityGrid.get(), gridFrame);
-    envire::EnvironmentItem::Ptr trGrid = mEnv->detachItem(mTraversabilityGrid.get());
-    mTraversabilityGrid->setUniqueId("lastTrGrid");
-    
-    mEnv->attachItem(mTraversabilityGrid.get(), gridFrame);
-    
-    try {
-        boost::intrusive_ptr<envire::MLSGrid> newMlsGrid = mEnv->getItem< envire::MLSGrid >();
-        if(newMlsGrid)
-        {
-            mMlsGrid = newMlsGrid;
-        }
-    } catch (std::exception e) {
-    }
-
-    //set from NoData to OldData. This variable
-    //should only be used internaly in this function.
-    mTraversabilityMapStatus = RTT::OldData;
-    return RTT::NewData;
-}
-
 void Task::updateHook()
 {
     TaskBase::updateHook();
 
     bool needsReplan = false;
 
+    // Receive map.
     RTT::FlowStatus ret = receiveEnvireData();
     if (ret == RTT::NoData) {
         return;
@@ -191,6 +115,7 @@ void Task::updateHook()
         needsReplan = true;
     }
 
+    // Receive start position.
     ret = _start_position_in.read(mStartPos);
     if (ret == RTT::NoData) {
         return;
@@ -202,6 +127,7 @@ void Task::updateHook()
         needsReplan = true;
     }
 
+    // Receive goal position.
     ret = _target_position_in.read(mGoalPos);
     if (ret == RTT::NoData) {
         return;
@@ -254,7 +180,7 @@ void Task::updateHook()
         {
             std::vector<Eigen::Vector2i> trajectoryGrid = mPlanner->getLocalTrajectory();
             std::vector<envire::GridBase::Position> trajectoryMlsGrid;
-                std::vector<base::Vector3d> trajectory;
+            std::vector<base::Vector3d> trajectory;
             
             for(std::vector<Eigen::Vector2i>::iterator it = trajectoryGrid.begin(); it != trajectoryGrid.end(); it++)
             {
@@ -282,6 +208,7 @@ void Task::updateHook()
         
             if(mMlsGrid)            
             {
+                // Legt die Trajectory auf die MLS Oberfläche.
                 std::vector<Eigen::Vector3d> pTrajectory = mMlsGrid->projectPointsOnSurface(mStartPos.z(), trajectoryMlsGrid, _trajectory_z_offset.get());
                 trajectory.clear();
                 for(std::vector<Eigen::Vector3d>::const_iterator it = pTrajectory.begin(); it != pTrajectory.end();it++)
@@ -315,4 +242,121 @@ void Task::updateHook()
         RTT::log(RTT::Info) << "Planning Done" << RTT::endlog();
         mLastReplanTime = currentTime;
     }
+}
+
+// PRIVATE
+
+RTT::FlowStatus Task::receiveEnvireData()
+{
+    envire::OrocosEmitter::Ptr binary_event;
+    RTT::FlowStatus ret = mTraversabilityMapStatus;
+    while(_envire_environment_in.read(binary_event) == RTT::NewData)
+    {
+        ret = RTT::NewData;
+        mEnv->applyEvents(*binary_event);   
+    }
+
+    if ((ret == RTT::NoData) || (ret == RTT::OldData))
+    {
+        return ret;
+    }
+    
+    // Just to add height informations to the trajectory.
+    extractMLS();
+    
+    // Extracts data and adds it to the planner. 
+    if(!extractTraversability()) {
+        return mTraversabilityMapStatus;
+    }
+
+    // Set from NoData to OldData, variable should only be used locally.
+    mTraversabilityMapStatus = RTT::OldData;
+    return RTT::NewData;
+}
+
+bool Task::extractTraversability() {
+    std::vector<envire::TraversabilityGrid*> maps = mEnv->getItems<envire::TraversabilityGrid>();
+    
+    // Lists all received traversability maps.
+    std::stringstream ss;
+    if(maps.size()) {
+        ss << "Received traversability map(s): " << std::endl;
+ 
+        std::string trav_map_id;
+        std::vector<envire::TraversabilityGrid*>::iterator it = maps.begin();
+        for(int i=0; it != maps.end(); ++it, ++i)
+        {
+            ss << i << ": " << (*it)->getUniqueId() << std::endl;
+        }
+        RTT::log(RTT::Info) << ss.str() << RTT::endlog(); 
+    } else {
+        RTT::log(RTT::Info) << "Environment does not contain any traversability grids" << RTT::endlog();
+        return false;
+    }
+
+    // Extract traversability map from evironment.
+    envire::TraversabilityGrid* traversability =
+            mEnv->getItem< envire::TraversabilityGrid >(_traversability_map_id.get()).get();
+    if (!traversability)
+    {
+        RTT::log(RTT::Warning) << "Traversability map '" << _traversability_map_id.get() << 
+                "' could not be extracted" << RTT::endlog();
+        return false;
+    } 
+   
+    RTT::log(RTT::Info) << "Traversability map " << 
+            _traversability_map_id.get() << " extracted" << RTT::endlog();
+
+    // Adds the trav map to the planner.
+    mPlanner->updateTraversabilityMap(traversability, mTraversabilityGrid.get());
+
+    // Removes old traversability grid if available.
+    if(mTraversabilityGrid)
+    {
+        envire::FrameNode *lastGridFrame = mTraversabilityGrid->getFrameNode();
+        mEnv->detachFrameNode(mTraversabilityGrid.get(), lastGridFrame);
+        mEnv->detachItem(mTraversabilityGrid.get());
+        mEnv->detachItem(lastGridFrame);
+    }
+    // Renames the current trav grid to 'lastTravGrid'.
+    mTraversabilityGrid = traversability;
+    envire::FrameNode *gridFrame = mTraversabilityGrid->getFrameNode();
+    mEnv->detachFrameNode(mTraversabilityGrid.get(), gridFrame);
+    envire::EnvironmentItem::Ptr travGrid = mEnv->detachItem(mTraversabilityGrid.get());
+    mTraversabilityGrid->setUniqueId("lastTravGrid");
+    mEnv->attachItem(mTraversabilityGrid.get(), gridFrame);
+    return true;
+}
+
+bool Task::extractMLS() {
+    std::vector<envire::MLSGrid*> mls_maps = mEnv->getItems<envire::MLSGrid>();
+    if(mls_maps.size()) {
+        std::stringstream ss;
+        ss << "Received MLS map(s): " << std::endl;
+        std::vector<envire::MLSGrid*>::iterator it = mls_maps.begin();
+        for(int i=0; it != mls_maps.end(); ++it, ++i)
+        {
+            ss << i << ": "<< (*it)->getUniqueId() << std::endl;
+        }
+        RTT::log(RTT::Info) << ss.str() << RTT::endlog();
+    } else {
+        RTT::log(RTT::Info) << "Environment does not contain any MLS grids" << RTT::endlog();
+        return false;
+    }
+    
+    // Extracts the first MLS of the environment.
+    try {
+        boost::intrusive_ptr<envire::MLSGrid> new_mls_grid = mEnv->getItem< envire::MLSGrid >();    
+        if(new_mls_grid)
+        {
+            mMlsGrid = new_mls_grid;
+            RTT::log(RTT::Info) << "MLS Grid " <<  new_mls_grid->getUniqueId() << 
+                    " extracted" << RTT::endlog();
+        }
+    } catch (std::exception e) {
+        RTT::log(RTT::Warning) << "MLS Grid could not be extracted: " << 
+            e.what() << RTT::endlog();
+        return false;
+    }
+    return true;
 }

@@ -20,14 +20,14 @@ class Task : public TaskBase
     friend class TaskBase;
     
  protected:
-    ///Optional mls grid for trajectory height adjustment
+    /** Optional mls grid for trajectory height adjustment. */
     boost::intrusive_ptr<envire::MLSGrid> mMlsGrid;
 
     nav_graph_search::DStarLite *mPlanner;
 
-    ///Current start position
+    /** Current start position */
     base::Vector3d mStartPos;
-    ///Current goal position
+    /** Current goal position */
     base::Vector3d mGoalPos;
 
     /**
@@ -38,23 +38,16 @@ class Task : public TaskBase
      * noData (no planning possible)
      */
     RTT::FlowStatus mTraversabilityMapStatus;
-    ///the last received traversability grid
+    
+    /** The last received traversability grid. */
     envire::TraversabilityGrid::Ptr mTraversabilityGrid;
     envire::FrameNode::Ptr mTraversabilityGridFrame;
     envire::Environment *mEnv;
 
-    ///time of the last planning
+    /** Time of the last planning. */
     base::Time mLastReplanTime;
-    ///start position of last planning 
+    /** Start position of last planning. */
     base::Vector3d mLastStartPosition;
-
-    /**
-     * This function receives the traversability grid
-     * and (if send) an mlsGrid.
-     * 
-     * Returns whether a new traversability grid is available / has been received.
-     */
-    RTT::FlowStatus receiveEnvireData();
     
  public:
     /** 
@@ -130,6 +123,26 @@ class Task : public TaskBase
      * before calling start() again.
      */
     // void cleanupHook();
+    
+ private:
+     /**
+     * This function receives the traversability grid
+     * and (if send) an mlsGrid.
+     * 
+     * Returns whether a new traversability grid is available / has been received.
+     */
+    RTT::FlowStatus receiveEnvireData();
+    
+    /**
+     * Extracts the traversability map and adds the information to the planner.
+     */
+    bool extractTraversability();
+    
+    /**
+     * Tries to extract the MLS from the environment to add height informations to the
+     * trajectory.
+     */
+    bool extractMLS();
 };
 }
 

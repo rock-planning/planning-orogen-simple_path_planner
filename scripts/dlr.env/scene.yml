@@ -2,7 +2,7 @@ objects:
 - class: 'envire::FrameNode'
   id: '/0'
   label: ''
-  transform: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+  transform: [1, 0, 0, 0,     0, 1, 0, 0,     0, 0, 1, 0,     0, 0, 0, 1]
 - class: 'envire::MLSGrid'
   id: '/4'
   label: ''
@@ -11,8 +11,8 @@ objects:
   cellSizeY: '280'
   scalex: '0.10000000000000001'
   scaley: '0.10000000000000001'
-  offsetx: '0'
-  offsety: '0'
+  offsetx: '-18'
+  offsety: '-14'
   width: '360'
   height: '280'
   hasCellColor: '0'

@@ -21,7 +21,7 @@ Orocos.run 'spacebot_simulation',
         "valgrind" => false, "wait" => 1000 do
         
     Orocos.conf.load_dir('.')
-=begin
+
     # SIMULATION
     simulation = TaskContext.get 'mars_simulation'
 
@@ -60,13 +60,12 @@ Orocos.run 'spacebot_simulation',
     imu.name = "300-100-SPBORB01-209-001_sim.001" # main body
     imu.configure
     imu.start
-       
+=begin       
     # CONTROLLER
     controller = TaskContext::get 'controller'
     controller.start
 =end    
     # LOAD ENV AND CREATE TRAV
-    # configure / start order important here?
     # What is 'Orocos.name_service.get' instead of 'TaskContext::get'
     transmitter = TaskContext::get 'transmitter'
     transmitter.configure()
@@ -93,9 +92,11 @@ Orocos.run 'spacebot_simulation',
     #imu.pose_samples.connect_to(simulation.pose_in)
     
     transmitter.envire_events.connect_to(traversability.mls_map)
+    transmitter.envire_events.connect_to(planner.envire_environment_in)
     traversability.traversability_map.connect_to(visualizer.envire_environment_in)
     traversability.traversability_map.connect_to(planner.envire_environment_in)
     planner.trajectory_out.connect_to(visualizer.trajectory_in)
+    planner.trajectory_out.connect_to(simulation.trajectory_in)
 
     # LOAD MAP
     transmitter.loadEnvironment('dlr.env')
@@ -107,11 +108,11 @@ Orocos.run 'spacebot_simulation',
     start_pos = planner_write_start.new_sample()
     stop_pos = planner_write_stop.new_sample()
     
-    start_pos.data[0] = 19
-    start_pos.data[1] = 6
+    start_pos.data[0] = 8
+    start_pos.data[1] = -10
 
-    stop_pos.data[0] = 19
-    stop_pos.data[1] = 12
+    stop_pos.data[0] = 8
+    stop_pos.data[1] = 10
 
     planner_write_start.write(start_pos)
     planner_write_stop.write(stop_pos)
