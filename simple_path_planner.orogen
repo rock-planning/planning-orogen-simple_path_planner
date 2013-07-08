@@ -44,7 +44,7 @@ task_context "Task" do
         doc "Trajectory from start to target position (or to the closest position within the known map), just using x and y"
 
     output_port("trajectory_spline_out", "std::vector</base/Trajectory>").
-        doc("Special wrapping for the trajectory follower")
+        doc("Trajectory from goal to start, special wrapping for the trajectory follower")
 
     periodic(0.1)
 end

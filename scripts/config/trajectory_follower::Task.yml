@@ -1,0 +1,25 @@
+--- name:default
+# K0 gain for PI controller
+K0_PI: 0.0
+# K0 gain for no orientation controller
+K0_nO: 5.0
+# K2 gain for P controller
+K2_P: 150.0
+# K2 gain for PI controller
+K2_PI: 150.0
+# K3 gain for P controller
+K3_P: 150.0
+# K3 gain for PI controller
+K3_PI: 150.0
+# Can be used to define the front of the robot (0 = X, Math::PI / 2.0 = Y)
+addPoseErrorY: 0 #1.5707963267948966
+# selects chainedProportionalIntegral controller to be used. Values: 0: No orientation, 1: chainedProportional, 2: chainedProportionalIntegral
+controllerType: 0
+# moving the pose estimation point forward for no orientation controller
+forwardLength: 0.1
+# forward speed of the robot
+forwardVelocity: 0.8 #6 #0.06 #0.2
+# Offset between GPS (w.r.t which Pose Estimator works) and approximated center of rotation
+gpsCenterofRotationOffset: 0.4
+# point turn speed of the robot
+pointTurnSpeed: 0.4 #7 #0.07 #0.0 #0.2

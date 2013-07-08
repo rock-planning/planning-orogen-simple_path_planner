@@ -111,20 +111,41 @@ void Task::updateHook()
 
     if (ret == RTT::NewData)
     {
-        std::cout << "Got Map" << std::endl;
+        RTT::log(RTT::Info) <<  "Received new environment data" << RTT::endlog();
         needsReplan = true;
     }
 
-    // Receive start position.
-    ret = _start_position_in.read(mStartPos);
-    if (ret == RTT::NoData) {
-        return;
-    }
+    // Receive start position. Prioritizes robot pose.
+    base::samples::RigidBodyState robotPose;
+    if(_robot_pose_in.connected()) {
+        if (_robot_pose_in.read(robotPose) == RTT::NewData)
+        {
+            mStartPos = robotPose.position;  
+            // Recalculate the trajectory if the distance exceeds a threshold
+            base::Vector3d p1 = robotPose.position;
+            base::Vector3d p2 = mLastStartPosition;
+            p1.z() = p2.z() = 0;
 
-    if (ret == RTT::NewData)
+            double distance = (p1 -p2).norm();
+            if(distance > _recalculate_trajectory_distance_threshold.get()) {  
+                RTT::log(RTT::Info) << "Trajectory will be recalculated, distance to last position of recalculation (" <<
+                        distance << ") exceeds threshold" << RTT::endlog();
+                needsReplan = true;
+            }
+        }
+    }
+    else 
     {
-        std::cout << "Got start Position " << mStartPos.transpose() << std::endl;
-        needsReplan = true;
+        ret = _start_position_in.read(mStartPos);
+        if (ret == RTT::NoData) {
+            return;
+        }
+
+        if (ret == RTT::NewData)
+        {
+            RTT::log(RTT::Info) <<  "Received start position: " << mStartPos.transpose() << RTT::endlog();
+            needsReplan = true;
+        }
     }
 
     // Receive goal position.
@@ -135,25 +156,8 @@ void Task::updateHook()
 
     if (ret == RTT::NewData)
     {
-        std::cout << "Got goal Position " << mGoalPos.transpose() << std::endl;
+        RTT::log(RTT::Info) <<  "Received goal position: " << mGoalPos.transpose() << RTT::endlog();
         needsReplan = true;
-    }
-
-    base::samples::RigidBodyState robotPose;
-    if (_robot_pose_in.read(robotPose) == RTT::NewData)
-    {
-        mStartPos = robotPose.position;  
-        // Recalculate the trajectory if the distance exceeds a threshold
-        base::Vector3d p1 = robotPose.position;
-        base::Vector3d p2 = mLastStartPosition;
-        p1.z() = p2.z() = 0;
-
-        double distance = (p1 -p2).norm();
-        if(distance > _recalculate_trajectory_distance_threshold.get()) {  
-            RTT::log(RTT::Info) << "Trajectory will be recalculated, distance to last position of recalculation (" <<
-                    distance << ") exceeds threshold" << RTT::endlog();
-            needsReplan = true;
-        }
     }
 
     // Initiate replanning if the robot stucks 
@@ -220,10 +224,16 @@ void Task::updateHook()
             }
                 
             _trajectory_out.write(trajectory);
+            
+            // Flip trajectory (goal to start)
+            std::vector<base::Vector3d> trajectory_flipped;
+            for(int i=trajectory.size()-1; i >= 0; --i) {
+                trajectory_flipped.push_back(trajectory[i]);
+            }
 
             base::Trajectory base_trajectory;
             base_trajectory.speed = 0.06; // set m/s.
-            base_trajectory.spline.interpolate(trajectory);
+            base_trajectory.spline.interpolate(trajectory_flipped);
 
             // Stuff it in a vector (it's possible to send several trajectories
             // which would be completed consecutively)
