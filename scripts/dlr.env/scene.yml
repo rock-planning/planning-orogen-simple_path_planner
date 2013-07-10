@@ -2,7 +2,7 @@ objects:
 - class: 'envire::FrameNode'
   id: '/0'
   label: ''
-  transform: [1, 0, 0, 0,     0, 1, 0, 0,     0, 0, 1, 0,     0, 0, 0, 1]
+  transform: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 - class: 'envire::MLSGrid'
   id: '/4'
   label: ''

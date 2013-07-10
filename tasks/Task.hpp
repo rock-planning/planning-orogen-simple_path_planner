@@ -39,9 +39,6 @@ class Task : public TaskBase
      */
     RTT::FlowStatus mTraversabilityMapStatus;
     
-    /** The last received traversability grid. */
-    envire::TraversabilityGrid::Ptr mTraversabilityGrid;
-    envire::FrameNode::Ptr mTraversabilityGridFrame;
     envire::Environment *mEnv;
 
     /** Time of the last planning. */

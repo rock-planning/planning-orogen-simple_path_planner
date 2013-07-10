@@ -106,8 +106,8 @@ Orocos.run 'spacebot_simulation',
     # PLANNER: SET GOAL POS
     planner_write_stop = planner.target_position_in.writer()
     stop_pos = planner_write_stop.new_sample()
-    stop_pos.data[0] = 8
-    stop_pos.data[1] = -10
+    stop_pos.data[0] = 2 #0
+    stop_pos.data[1] = 2 #-10
     planner_write_stop.write(stop_pos)
 
     Vizkit.exec

@@ -13,9 +13,9 @@ Task::Task(std::string const& name)
     : TaskBase(name),
     mMlsGrid(NULL),
     mPlanner(NULL),
-    mStartPos(Eigen::Vector3d::Zero()),
-    mGoalPos(Eigen::Vector3d::Zero()),
-    mLastStartPosition(Eigen::Vector3d::Zero())
+    mStartPos(base::Vector3d::Zero()),
+    mGoalPos(base::Vector3d::Zero()),
+    mLastStartPosition(base::Vector3d::Zero())
 {
 }
 
@@ -23,15 +23,16 @@ Task::Task(std::string const& name, RTT::ExecutionEngine* engine)
     : TaskBase(name, engine),
     mMlsGrid(NULL),
     mPlanner(NULL),
-    mStartPos(Eigen::Vector3d::Zero()),
-    mGoalPos(Eigen::Vector3d::Zero()),
-    mLastStartPosition(Eigen::Vector3d::Zero())
+    mStartPos(base::Vector3d::Zero()),
+    mGoalPos(base::Vector3d::Zero()),
+    mLastStartPosition(base::Vector3d::Zero())
 {
 }
 
 Task::~Task()
 {
-    delete mPlanner;
+    delete mPlanner; mPlanner = NULL;
+    delete mEnv; mEnv = NULL;
 }
 
 bool Task::configureHook()
@@ -170,70 +171,53 @@ void Task::updateHook()
     if(needsReplan) {
         RTT::log(RTT::Info) << "Planning" << RTT::endlog();
 
-        size_t startX, startY, endX, endY;
-
-        if(!mTraversabilityGrid->toGrid(mStartPos, startX, startY)) {
-            throw std::runtime_error("Error start is not in map");
-        }
-
-        if(!mTraversabilityGrid->toGrid(mGoalPos, endX, endY)) {
-            throw std::runtime_error("Error goal is not in map");
-        }
-
-        if(mPlanner->run(startX, startY, endX, endY))
+        if(mPlanner->run(mStartPos, mGoalPos))
         {
-            std::vector<Eigen::Vector2i> trajectoryGrid = mPlanner->getLocalTrajectory();
-            std::vector<envire::GridBase::Position> trajectoryMlsGrid;
-            std::vector<base::Vector3d> trajectory;
+            std::vector<base::Vector3d> trajectory_map = mPlanner->getTrajectoryMap();
+            std::vector<envire::GridBase::Position> trajectory_mls_grid;
+            envire::GridBase::Position grid_pos;
             
-            for(std::vector<Eigen::Vector2i>::iterator it = trajectoryGrid.begin(); it != trajectoryGrid.end(); it++)
-            {
-                const Eigen::Vector3d p = mTraversabilityGrid->fromGrid(it->x(), it->y());
-                envire::GridBase::Position gridPos;
-                if(mMlsGrid)
-                {
-                    if(mMlsGrid->toGrid(p, gridPos.x, gridPos.y)) {
-                        trajectoryMlsGrid.push_back(gridPos);
+            // Creates a MLS grid trajectory.
+            if(mMlsGrid) {
+                std::vector<base::Vector3d>::iterator it_map = trajectory_map.begin();
+                for(; it_map != trajectory_map.end(); ++it_map) {
+                    if(mMlsGrid->toGrid(*it_map, grid_pos.x, grid_pos.y)) {
+                        trajectory_mls_grid.push_back(grid_pos);
                     } else {
-                        std::cout << "Warning Trajectory is outside of MLSGrid this ist most probably a bug" << std::endl;    
+                        RTT::log(RTT::Warning) << "Trajectory is outside of the MLSGrid which is most probably a bug" << RTT::endlog();    
                     }
                 }
-                trajectory.push_back(p);
+   
+                // Adds the height to the MLS grid trajectory and refills trajectory map.
+                std::vector<Eigen::Vector3d> p_trajectory = 
+                        mMlsGrid->projectPointsOnSurface(mStartPos.z(), 
+                                trajectory_mls_grid, 
+                                _trajectory_z_offset.get());
+                trajectory_map.clear();
+                
+                double x = 0.0, y = 0.0;
+                std::vector<Eigen::Vector3d>::const_iterator it = p_trajectory.begin();
+                for(; it != p_trajectory.end(); ++it)
+                {
+                    mMlsGrid->fromGrid(it->x(), it->y(), x, y);
+                    trajectory_map.push_back(base::Vector3d(x,y, it->z()));
+                }
             }
-
+                
+            _trajectory_out.write(trajectory_map);
+            
             std::stringstream oss;
             oss << "Calculated trajectory: " << std::endl;
-            for(unsigned int i = 0; i < trajectory.size(); ++i) {
-                oss << "(" << trajectory[i].transpose() << ") ";
+            for(unsigned int i = 0; i < trajectory_map.size(); ++i) {
+                oss << "(" << trajectory_map[i].transpose() << ") ";
             }
             oss << std::endl;
             RTT::log(RTT::Info) << oss.str() << RTT::endlog();
             std::cout << oss.str() << std::endl;
-        
-            if(mMlsGrid)            
-            {
-                // Legt die Trajectory auf die MLS Oberfläche.
-                std::vector<Eigen::Vector3d> pTrajectory = mMlsGrid->projectPointsOnSurface(mStartPos.z(), trajectoryMlsGrid, _trajectory_z_offset.get());
-                trajectory.clear();
-                for(std::vector<Eigen::Vector3d>::const_iterator it = pTrajectory.begin(); it != pTrajectory.end();it++)
-                {
-                    double x, y;
-                    mMlsGrid->fromGrid(it->x(), it->y(), x, y);
-                    trajectory.push_back(base::Vector3d(x,y, it->z()));
-                }
-            }
-                
-            _trajectory_out.write(trajectory);
-            
-            // Flip trajectory (goal to start)
-            std::vector<base::Vector3d> trajectory_flipped;
-            for(int i=trajectory.size()-1; i >= 0; --i) {
-                trajectory_flipped.push_back(trajectory[i]);
-            }
 
             base::Trajectory base_trajectory;
             base_trajectory.speed = 0.06; // set m/s.
-            base_trajectory.spline.interpolate(trajectory_flipped);
+            base_trajectory.spline.interpolate(trajectory_map);
 
             // Stuff it in a vector (it's possible to send several trajectories
             // which would be completed consecutively)
@@ -318,23 +302,8 @@ bool Task::extractTraversability() {
             _traversability_map_id.get() << " extracted" << RTT::endlog();
 
     // Adds the trav map to the planner.
-    mPlanner->updateTraversabilityMap(traversability, mTraversabilityGrid.get());
+    mPlanner->updateTraversabilityMap(traversability);
 
-    // Removes old traversability grid if available.
-    if(mTraversabilityGrid)
-    {
-        envire::FrameNode *lastGridFrame = mTraversabilityGrid->getFrameNode();
-        mEnv->detachFrameNode(mTraversabilityGrid.get(), lastGridFrame);
-        mEnv->detachItem(mTraversabilityGrid.get());
-        mEnv->detachItem(lastGridFrame);
-    }
-    // Renames the current trav grid to 'lastTravGrid'.
-    mTraversabilityGrid = traversability;
-    envire::FrameNode *gridFrame = mTraversabilityGrid->getFrameNode();
-    mEnv->detachFrameNode(mTraversabilityGrid.get(), gridFrame);
-    envire::EnvironmentItem::Ptr travGrid = mEnv->detachItem(mTraversabilityGrid.get());
-    mTraversabilityGrid->setUniqueId("lastTravGrid");
-    mEnv->attachItem(mTraversabilityGrid.get(), gridFrame);
     return true;
 }
 
