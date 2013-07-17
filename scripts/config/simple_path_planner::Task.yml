@@ -9,3 +9,5 @@ terrain_classes_path: ./terrain_classes.txt
 trajectory_z_offset: 0.03
 # Required to extract the traversability map from the received envire-environment. Attaching the map to the environment adds a / as a prefix to the ID
 traversability_map_id: /traversability/map
+# If set the statistics will be written to the passed file within the stopHook
+statistics_path: "statistics.txt"

@@ -18,8 +18,8 @@ controllerType: 0
 # moving the pose estimation point forward for no orientation controller
 forwardLength: 0.1
 # forward speed of the robot
-forwardVelocity: 0.8 #6 #0.06 #0.2
+forwardVelocity: 0.42 # 0.212
 # Offset between GPS (w.r.t which Pose Estimator works) and approximated center of rotation
 gpsCenterofRotationOffset: 0.4
 # point turn speed of the robot
-pointTurnSpeed: 0.4 #7 #0.07 #0.0 #0.2
+pointTurnSpeed: 0.42 # 0.2618

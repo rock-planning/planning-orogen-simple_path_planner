@@ -6,6 +6,7 @@
 #include <envire/Orocos.hpp>
 #include <envire/maps/MLSGrid.hpp>
 #include <iterator>
+#include <fstream>
 
 using namespace simple_path_planner;
 
@@ -235,6 +236,19 @@ void Task::updateHook()
 
         RTT::log(RTT::Info) << "Planning Done" << RTT::endlog();
         mLastReplanTime = currentTime;
+    }
+}
+
+void Task::stopHook() {
+    std::string path = _statistics_path.get();
+    if(!path.empty()){
+        RTT::log(RTT::Info) << "Writing path planning statistics to " << path << RTT::endlog();
+        std::ofstream stat_file;
+        stat_file.open(path.c_str());
+        std::string stat_str = mPlanner->getStatistics().toString();
+        stat_file << stat_str;
+        RTT::log(RTT::Info) << stat_str << RTT::endlog();
+        stat_file.close();
     }
 }
 

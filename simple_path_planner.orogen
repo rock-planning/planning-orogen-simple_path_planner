@@ -25,6 +25,9 @@ task_context "Task" do
 
     property("trajectory_z_offset", "double", 0.03).
         doc("An offset in Z that gets added, if the trajectory is projected on top of an MLS")
+        
+    property("statistics_path", "std/string").
+        doc("If set the statistics will be written to the passed file within the stopHook")
 
     # Input
     input_port('envire_environment_in', ro_ptr('std/vector</envire/BinaryEvent>')).

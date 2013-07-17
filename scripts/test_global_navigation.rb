@@ -12,6 +12,11 @@ Orocos.initialize
 ENV['LANG'] = 'C'
 ENV['LC_NUMERIC'] = 'C'
 
+def distance(p1, p2)
+    return Math.sqrt( ((p1.data[0] - p2.data[0]) * (p1.data[0] - p2.data[0])) +
+                ((p1.data[1] - p2.data[1]) * (p1.data[1] - p2.data[1])) )
+end
+
 Orocos.run 'spacebot_simulation',
         'spacebot_motioncontroller::Task' => 'controller',
         'envire::SynchronizationTransmitter' => 'transmitter', 
@@ -49,6 +54,12 @@ Orocos.run 'spacebot_simulation',
     imu.apply_conf(['default'])
     imu.configure
     imu.start
+    
+    # VELODYNE
+    #velodyne = TaskContext.get 'mars_velodyne'
+    #velodyne.name = '300-100-SPBORB01-209-001_sim.003' # Name of the velodyne within the scene file.
+    #velodyne.configure
+    #velodyne.start
     
     # LOAD ENV AND CREATE TRAV
     # What is 'Orocos.name_service.get' instead of 'TaskContext::get'
@@ -104,11 +115,42 @@ Orocos.run 'spacebot_simulation',
     transmitter.loadEnvironment('dlr.env')
     
     # PLANNER: SET GOAL POS
-    planner_write_stop = planner.target_position_in.writer()
-    stop_pos = planner_write_stop.new_sample()
+    planner_write_stop = planner.target_position_in.writer
+    stop_pos = planner_write_stop.new_sample
     stop_pos.data[0] = 2 #0
     stop_pos.data[1] = 2 #-10
     planner_write_stop.write(stop_pos)
+
+    r = Random.new
+    goal_writer = planner.target_position_in.writer
+    goal_pos = goal_writer.new_sample
+    pose_reader = imu.pose_samples.reader
+    while true
+        goal_pos.data[0] = r.rand(-17...17)
+        goal_pos.data[1] = r.rand(-13...13)
+        puts "Set new goal pos"
+        goal_writer.write(goal_pos)
+
+        while true
+            if rbs = pose_reader.read
+                position = rbs.position
+                sleep 0.2
+                dist = distance(goal_pos, position)
+                puts "Distanz: #{dist}"
+                if(dist < 1.0)
+                    puts "Goal reached"
+                    break
+                else
+                    sleep 1
+                end
+            else
+                puts "no position received"
+                sleep 1
+            end
+        end
+    end
+    
+
 
     Vizkit.exec
     
