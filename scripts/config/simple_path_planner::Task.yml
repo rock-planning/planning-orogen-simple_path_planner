@@ -4,7 +4,7 @@ recalculate_trajectory_distance_threshold: 0.2
 # Used to initiate replannig after the defined amount of time (in milliseconds)
 replan_timeout_ms: 20000
 # Path to the terrain class definition file
-terrain_classes_path: ./terrain_classes.txt
+terrain_classes_path: ./config/terrain_classes.txt
 # An offset in Z that gets added, if the trajectory is projected on top of an MLS
 trajectory_z_offset: 0.03
 # Required to extract the traversability map from the received envire-environment. Attaching the map to the environment adds a / as a prefix to the ID

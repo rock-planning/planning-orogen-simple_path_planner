@@ -56,10 +56,13 @@ Orocos.run 'spacebot_simulation',
     imu.start
     
     # VELODYNE
-    #velodyne = TaskContext.get 'mars_velodyne'
-    #velodyne.name = '300-100-SPBORB01-209-001_sim.003' # Name of the velodyne within the scene file.
-    #velodyne.configure
-    #velodyne.start
+    velodyne = TaskContext.get 'mars_velodyne'
+    velodyne.apply_conf(['default'])
+    velodyne.configure
+    velodyne.start   
+    velodyne.addCamera('velodyne90',90);
+    velodyne.addCamera("velodyne180",180);
+    velodyne.addCamera("velodyne270",270);
     
     # LOAD ENV AND CREATE TRAV
     # What is 'Orocos.name_service.get' instead of 'TaskContext::get'
@@ -110,6 +113,7 @@ Orocos.run 'spacebot_simulation',
     planner.trajectory_spline_out.connect_to(visualizer.trajectory_spline_in)
     follower.motion_command.connect_to(controller.motion_command)
     follower.motion_command.connect_to(visualizer.motion_command_in)
+    velodyne.pointcloud.connect_to(visualizer.pointcloud_in)
 
     # LOAD MAP
     transmitter.loadEnvironment('dlr.env')

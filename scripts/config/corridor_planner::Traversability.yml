@@ -16,4 +16,4 @@ traversability_conf:
   class_count: 10
   min_width: 0.5
   ground_clearance: 0.3
-  obstacle_clearance: 0.5
+  obstacle_clearance: 0.75
