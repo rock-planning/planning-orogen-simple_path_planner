@@ -10,10 +10,12 @@ mls_id: /4
 # structure describing the known terrain types
 terrain_info: []
 # configuration parameters for the traversability transformation
+# boost assertion if to much obstacles are added, ticket created
+# desired values are added as a comment
 traversability_conf:
-  weight_force: 40.0
-  force_threshold: 30.0
+  weight_force: 600.0 # 600
+  force_threshold: 200.0 # 200
   class_count: 10
   min_width: 0.5
   ground_clearance: 0.3
-  obstacle_clearance: 0.75
+  obstacle_clearance: 1.10
