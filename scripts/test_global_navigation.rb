@@ -2,7 +2,7 @@ require 'orocos'
 require 'vizkit'
 require 'readline'
 
-Orocos::CORBA.max_message_size = 8000000 # stucks if > than this
+Orocos::CORBA.max_message_size = 12000000 # stucks if > than this
 
 include Orocos
 Orocos.initialize
@@ -34,7 +34,8 @@ Orocos.run 'spacebot_simulation',
     simulation.configure
     simulation.start
     # Has to be called after configure.
-    simulation.loadScene("#{ENV['AUTOPROJ_PROJECT_BASE']}/install/configuration/mars_scenes/spaceBot.scn")
+    simulation.loadScene("#{ENV['AUTOPROJ_PROJECT_BASE']}/bundles/spacebot/data/mars_scenes/spaceBot.scn")
+    simulation.loadScene("#{ENV['AUTOPROJ_PROJECT_BASE']}/bundles/spacebot/data/mars_scenes/hall.scn")
     
     # ACTUATORS
     locomotion_actuators_names = ["rear_left", "rear_left_turn", "middle_left", "middle_left_turn", "front_right", "front_right_turn", 
@@ -116,7 +117,7 @@ Orocos.run 'spacebot_simulation',
     velodyne.pointcloud.connect_to(visualizer.pointcloud_in)
 
     # LOAD MAP
-    transmitter.loadEnvironment('dlr.env')
+    transmitter.loadEnvironment("#{ENV['AUTOPROJ_PROJECT_BASE']}/bundles/spacebot/data/traversability_maps/dlr.env")
     
     # PLANNER: SET GOAL POS
     planner_write_stop = planner.target_position_in.writer
