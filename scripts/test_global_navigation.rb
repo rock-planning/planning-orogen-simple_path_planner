@@ -26,7 +26,7 @@ Orocos.run 'spacebot_simulation',
         'visualizer_module::Task' => 'visualizer', 
         "valgrind" => false, "wait" => 1000 do
         
-    Orocos.conf.load_dir('./config')
+    Orocos.conf.load_dir("#{ENV['AUTOPROJ_PROJECT_BASE']}/bundles/spacebot/config/orogen")
 
     # SIMULATION
     simulation = TaskContext.get 'mars_simulation'  
