@@ -2,7 +2,7 @@
 # the envire prefix that should be used to create new maps
 env_name: /traversability/
 # if set to a non-empty string, save each generated environment under env_save_path/<seq number>/
-env_save_path: 'foo'
+env_save_path: ''
 # If necessary the size of the input map will be extended, such that the output always contains the provided points in world coordinates.
 map_extents: []
 # the map ID of the input MLS map. The terrain type information is expected to be encoded as RGB value on the MLS
