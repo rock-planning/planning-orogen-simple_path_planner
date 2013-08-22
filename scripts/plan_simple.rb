@@ -15,6 +15,8 @@ Orocos.run 'envire::SynchronizationTransmitter' => 'transmitter',
     transmitter = Orocos.name_service.get 'transmitter'
     traversability = Orocos.name_service.get 'traversability'
     planner = Orocos.name_service.get 'planner'
+
+    Orocos.conf.load_dir("#{ENV['AUTOPROJ_PROJECT_BASE']}/bundles/spacebot/config/orogen")
     
     Orocos.log_all_ports()
     Orocos.conf.load_dir('.')
