@@ -15,7 +15,7 @@ task_context "Task" do
         doc("Path to the terrain class definition file")
 
     property("traversability_map_id", "std/string", "/traversability").
-        doc("Required to extract the traversability map from the received envire-environment. Attaching the map to the environment adds a / as a prefix to the ID")
+        doc("Try to extract this traversability map, otherwise the first traversability map will be used (if it is the only one)")
 
     property("recalculate_trajectory_distance_threshold", "double", 0.2).
         doc("If the distance between the current robot position and its position during the last recalculation exceeds this threshold, the trajectory will be recalculated")

@@ -145,7 +145,7 @@ void Task::updateHook()
 
         if (ret == RTT::NewData)
         {
-            RTT::log(RTT::Info) <<  "Received start position: " << mStartPos.transpose() << RTT::endlog();
+            RTT::log(RTT::Info) <<  "Received start position: " << mStartPos << RTT::endlog();
             needsReplan = true;
         }
     }
@@ -158,7 +158,7 @@ void Task::updateHook()
 
     if (ret == RTT::NewData)
     {
-        RTT::log(RTT::Info) <<  "Received goal position: " << mGoalPos.transpose() << RTT::endlog();
+        RTT::log(RTT::Info) <<  "Received goal position: " << mGoalPos << RTT::endlog();
         needsReplan = true;
     }
 
@@ -210,11 +210,11 @@ void Task::updateHook()
             std::stringstream oss;
             oss << "Calculated trajectory: " << std::endl;
             for(unsigned int i = 0; i < trajectory_map.size(); ++i) {
-                oss << "(" << trajectory_map[i].transpose() << ") ";
+                oss << "(" << trajectory_map[i][0] << ", " << 
+                        trajectory_map[i][1] << ", " <<  
+                        trajectory_map[i][2] << ") ";
             }
-            oss << std::endl;
             RTT::log(RTT::Info) << oss.str() << RTT::endlog();
-            std::cout << oss.str() << std::endl;
 
             base::Trajectory base_trajectory;
             base_trajectory.speed = 0.06; // set m/s.
@@ -285,6 +285,8 @@ RTT::FlowStatus Task::receiveEnvireData()
 bool Task::extractTraversability() {
     std::vector<envire::TraversabilityGrid*> maps = mEnv->getItems<envire::TraversabilityGrid>();
     
+    mEnv->serialize("/tmp/env_tmp");
+    
     // Lists all received traversability maps.
     std::stringstream ss;
     if(maps.size()) {
@@ -298,7 +300,7 @@ bool Task::extractTraversability() {
         }
         RTT::log(RTT::Info) << ss.str() << RTT::endlog(); 
     } else {
-        RTT::log(RTT::Info) << "Environment does not contain any traversability grids" << RTT::endlog();
+        RTT::log(RTT::Warning) << "Environment does not contain any traversability grids" << RTT::endlog();
         return false;
     }
 
@@ -307,13 +309,24 @@ bool Task::extractTraversability() {
             mEnv->getItem< envire::TraversabilityGrid >(_traversability_map_id.get()).get();
     if (!traversability)
     {
-        RTT::log(RTT::Warning) << "Traversability map '" << _traversability_map_id.get() << 
-                "' could not be extracted" << RTT::endlog();
-        return false;
+        RTT::log(RTT::Info) << "No traversability map with id" << _traversability_map_id.get() << RTT::endlog();
+        if(maps.size() > 1) {
+            RTT::log(RTT::Warning) << "The environment contains more than one traversability map, please specify the map ID" << RTT::endlog();
+            return false;
+        } else {
+            RTT::log(RTT::Info) << "The first traversability map will be used" << RTT::endlog();
+            std::vector<envire::TraversabilityGrid*>::iterator it = maps.begin();
+            traversability = mEnv->getItem< envire::TraversabilityGrid >((*it)->getUniqueId()).get();
+            if (!traversability)
+            {
+                RTT::log(RTT::Warning) << "Traversability map '" << (*it)->getUniqueId() << 
+                        "' could not be extracted" << RTT::endlog();
+                return false;
+            } 
+        }
     } 
-   
-    RTT::log(RTT::Info) << "Traversability map " << 
-            _traversability_map_id.get() << " extracted" << RTT::endlog();
+    
+    RTT::log(RTT::Info) << "Traversability map " << traversability->getUniqueId() << " extracted" << RTT::endlog();
 
     // Adds the trav map to the planner.
     mPlanner->updateTraversabilityMap(traversability);
