@@ -59,26 +59,40 @@ Orocos.run 'envire::SynchronizationTransmitter' => 'transmitter',
     # LOAD MAP
     transmitter.loadEnvironment("#{ENV['AUTOPROJ_PROJECT_BASE']}/bundles/spacebot/data/traversability_maps/dlr.env")
     
-    # PLANNER: SET GOAL POS
-    planner_write_stop = planner.target_position_in.writer
-    stop_pos = planner_write_stop.new_sample
-    stop_pos.data[0] = 2 #0
-    stop_pos.data[1] = 2 #-10
-    planner_write_stop.write(stop_pos)
-
+    # PLANNER: SET START AND GOAL POS
+    r = Random.new
+    start_writer = planner.start_position_in.writer
+    start_pos = start_writer.new_sample
+    start_pos.data[0] = -15
+    start_pos.data[1] = -11
+    start_writer.write(start_pos)
+    
     r = Random.new
     goal_writer = planner.target_position_in.writer
     goal_pos = goal_writer.new_sample
-    goal_pos.data[0] = r.rand(-17...17)
-    goal_pos.data[1] = r.rand(-13...13)
+    goal_pos.data[0] = 15 #r.rand(-17...17)
+    goal_pos.data[1] = 11 # r.rand(-13...13)
     goal_writer.write(goal_pos)
-
-    while true
+    
+    view3d = Vizkit.vizkit3d_widget
+    view3d.show
+    dstar_lite_trav_map_viz = Vizkit.default_loader.EnvireVisualization
+    
+    Vizkit.connect_port_to 'planner', 'internal_trav_map', :pull => false, :update_frequency => 33 do |sample, name|
+        dstar_lite_trav_map_viz.updateBinaryEvents(sample)
+    end
+    
+    #while true
         transmitter.loadEnvironment("#{ENV['AUTOPROJ_PROJECT_BASE']}/bundles/spacebot/data/traversability_maps/dlr.env")
+    #end
+   
+    Vizkit.display planner
+    begin
+        Vizkit.exec
+    rescue Interrupt => e
+
     end
 
-    Vizkit.exec
-    
     Readline::readline("Press ENTER to exit ...")
 end
 

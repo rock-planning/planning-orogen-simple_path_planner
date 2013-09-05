@@ -9,6 +9,8 @@ import_types_from "envire"
 
 task_context "Task" do
     needs_configuration
+    
+    error_states 'GOAL_SET_ON_OBSTACLE', 'NO_PATH_TO_GOAL'
 
     # Properties
     property("terrain_classes_path", "std/string", "./terrain_classes.txt").
@@ -48,6 +50,9 @@ task_context "Task" do
 
     output_port("trajectory_spline_out", "std::vector</base/Trajectory>").
         doc("Trajectory from goal to start, special wrapping for the trajectory follower")
+        
+    output_port('internal_trav_map', ro_ptr('std/vector</envire/BinaryEvent>')).
+        doc("Internally used DStarLite traversability map. This port should only be connected for testing.")
 
     periodic(0.1)
 end

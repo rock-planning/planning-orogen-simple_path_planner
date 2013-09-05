@@ -23,13 +23,16 @@ class Task : public TaskBase
     /** Optional mls grid for trajectory height adjustment. */
     boost::intrusive_ptr<envire::MLSGrid> mMlsGrid;
 
-    nav_graph_search::DStarLite *mPlanner;
+    nav_graph_search::DStarLite* mPlanner;
 
     /** Current start position */
     base::Vector3d mStartPos;
     /** Current goal position */
     base::Vector3d mGoalPos;
-
+    /** Time of the last planning. */
+    base::Time mLastReplanTime;
+    /** Start position of last planning. */
+    base::Vector3d mLastStartPosition;
     /**
      * Status of the traversability map
      * is is either 
@@ -39,13 +42,9 @@ class Task : public TaskBase
      */
     RTT::FlowStatus mTraversabilityMapStatus;
     
-    envire::Environment *mEnv;
-
-    /** Time of the last planning. */
-    base::Time mLastReplanTime;
-    /** Start position of last planning. */
-    base::Vector3d mLastStartPosition;
-    
+    envire::Environment* mEnv;
+    envire::TraversabilityGrid* mFirstReceivedTravMap;
+    nav_graph_search::DStarLite::Error mPlanningError;
  public:
     /** 
      * TaskContext constructor for Task
@@ -140,6 +139,12 @@ class Task : public TaskBase
      * trajectory.
      */
     bool extractMLS();
+    
+    /**
+     * Requests the dstar lite map and send it as an envire traversability map.
+     * This should only be used for testing.
+     */
+    void sendInternalDStarLiteMap();
 };
 }
 

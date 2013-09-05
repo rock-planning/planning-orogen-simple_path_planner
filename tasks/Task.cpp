@@ -16,7 +16,10 @@ Task::Task(std::string const& name)
     mPlanner(NULL),
     mStartPos(base::Vector3d::Zero()),
     mGoalPos(base::Vector3d::Zero()),
-    mLastStartPosition(base::Vector3d::Zero())
+    mLastReplanTime(),
+    mLastStartPosition(base::Vector3d::Zero()),
+    mEnv(NULL),
+    mFirstReceivedTravMap(NULL)
 {
 }
 
@@ -26,7 +29,10 @@ Task::Task(std::string const& name, RTT::ExecutionEngine* engine)
     mPlanner(NULL),
     mStartPos(base::Vector3d::Zero()),
     mGoalPos(base::Vector3d::Zero()),
-    mLastStartPosition(base::Vector3d::Zero())
+    mLastReplanTime(),
+    mLastStartPosition(base::Vector3d::Zero()),
+    mEnv(NULL),
+    mFirstReceivedTravMap(NULL)
 {
 }
 
@@ -34,6 +40,7 @@ Task::~Task()
 {
     delete mPlanner; mPlanner = NULL;
     delete mEnv; mEnv = NULL;
+    delete mFirstReceivedTravMap; mFirstReceivedTravMap = NULL;
 }
 
 bool Task::configureHook()
@@ -115,6 +122,11 @@ void Task::updateHook()
     {
         RTT::log(RTT::Info) <<  "Received new environment data" << RTT::endlog();
         needsReplan = true;
+        
+        // New map data received, send the current dstar lite trav map if the port is connected.
+        if(_internal_trav_map.connected()) {
+            sendInternalDStarLiteMap();
+        }
     }
 
     // Receive start position. Prioritizes robot pose.
@@ -172,7 +184,7 @@ void Task::updateHook()
     if(needsReplan) {
         RTT::log(RTT::Info) << "Planning" << RTT::endlog();
 
-        if(mPlanner->run(mStartPos, mGoalPos))
+        if(mPlanner->run(mStartPos, mGoalPos, &mPlanningError))
         {
             std::vector<base::Vector3d> trajectory_map = mPlanner->getTrajectoryMap();
             std::vector<envire::GridBase::Position> trajectory_mls_grid;
@@ -231,7 +243,13 @@ void Task::updateHook()
         }
         else
         {
-            RTT::log(RTT::Warning) << "Trajectory could not be calculated" << RTT::endlog();
+            RTT::log(RTT::Warning) << "Trajectory could not be calculated, error " << 
+                    mPlanningError << " has been returned" << RTT::endlog();
+            switch (mPlanningError) {
+                case nav_graph_search::DStarLite::GOAL_SET_ON_OBSTACLE: error(GOAL_SET_ON_OBSTACLE); break;
+                case nav_graph_search::DStarLite::NO_PATH_TO_GOAL: error(NO_PATH_TO_GOAL); break;
+                default: break;
+            }
         }
 
         RTT::log(RTT::Info) << "Planning Done" << RTT::endlog();
@@ -327,7 +345,7 @@ bool Task::extractTraversability() {
     } 
     
     RTT::log(RTT::Info) << "Traversability map " << traversability->getUniqueId() << " extracted" << RTT::endlog();
-
+    
     // Adds the trav map to the planner.
     mPlanner->updateTraversabilityMap(traversability);
 
@@ -365,4 +383,29 @@ bool Task::extractMLS() {
         return false;
     }
     return true;
+}
+
+void Task::sendInternalDStarLiteMap() {
+    RTT::log(RTT::Info) <<  "Send internal dstar lite trav map" << RTT::endlog();
+    envire::Environment env_tmp;
+    // Copy first received trav map.
+    envire::TraversabilityGrid* trav_grid_tmp = new envire::TraversabilityGrid(*(mPlanner->getRootTravMap()));
+    env_tmp.attachItem(trav_grid_tmp);
+    envire::FrameNode* p_fn = new envire::FrameNode();
+    env_tmp.getRootNode()->addChild(p_fn);
+    trav_grid_tmp->setFrameNode(p_fn);
+
+    int terrain_class = 0;
+    envire::TraversabilityGrid::ArrayType& trav_array = trav_grid_tmp->getGridData();
+    for(size_t x=0; x < trav_grid_tmp->getCellSizeX(); ++x) {
+        for(size_t y=0; y < trav_grid_tmp->getCellSizeY(); ++y) {
+            if(mPlanner->getTerrainClass(x,y,terrain_class)) {
+                // add to trav map
+                trav_array[y][x] = terrain_class;
+            }
+        }
+    } 
+    envire::OrocosEmitter emitter_tmp(&env_tmp, _internal_trav_map);
+    emitter_tmp.setTime(base::Time::now());
+    emitter_tmp.flush();
 }
