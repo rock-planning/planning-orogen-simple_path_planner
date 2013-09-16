@@ -141,7 +141,8 @@ void Task::updateHook()
             p1.z() = p2.z() = 0;
 
             double distance = (p1 -p2).norm();
-            if(distance > _recalculate_trajectory_distance_threshold.get()) {  
+            if(distance > _recalculate_trajectory_distance_threshold.get() && 
+                    _replanning_on_new_start_position.get()) {  
                 RTT::log(RTT::Info) << "Trajectory will be recalculated, distance to last position of recalculation (" <<
                         distance << ") exceeds threshold" << RTT::endlog();
                 needsReplan = true;
@@ -155,7 +156,7 @@ void Task::updateHook()
             return;
         }
 
-        if (ret == RTT::NewData)
+        if (ret == RTT::NewData  && _replanning_on_new_start_position.get())
         {
             RTT::log(RTT::Info) <<  "Received start position: " << mStartPos << RTT::endlog();
             needsReplan = true;
@@ -176,7 +177,8 @@ void Task::updateHook()
 
     // Initiate replanning if the robot stucks 
     base::Time currentTime = base::Time::now();
-    if((currentTime - mLastReplanTime).toMilliseconds() > _replan_timeout_ms.get()) {
+    if(_replan_timeout_ms.get() > 0 && 
+            (currentTime - mLastReplanTime).toMilliseconds() > _replan_timeout_ms.get()) {
         RTT::log(RTT::Info) << "Replanning initiated, robot did not change its position for " << _replan_timeout_ms.get() << " msec" << RTT::endlog();
         needsReplan = true;
     }    

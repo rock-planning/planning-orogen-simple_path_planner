@@ -22,14 +22,17 @@ task_context "Task" do
     property("recalculate_trajectory_distance_threshold", "double", 0.2).
         doc("If the distance between the current robot position and its position during the last recalculation exceeds this threshold, the trajectory will be recalculated")
 
-    property("replan_timeout_ms", "int", 20000).
-        doc("Used to initiate replannig after the defined amount of time (in milliseconds)")
+    property("replan_timeout_ms", "int", 0).
+        doc("Used to initiate replannig after the defined amount of time (in milliseconds), set to 0 to disable")
 
     property("trajectory_z_offset", "double", 0.03).
         doc("An offset in Z that gets added, if the trajectory is projected on top of an MLS")
         
     property("statistics_path", "std/string").
         doc("If set the statistics will be written to the passed file within the stopHook")
+        
+    property("replanning_on_new_start_position", "bool", false).
+        doc("By default only a new map or a new goal position initiates a replanning")
 
     # Input
     input_port('envire_environment_in', ro_ptr('std/vector</envire/BinaryEvent>')).
