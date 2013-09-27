@@ -111,10 +111,12 @@ void Task::updateHook()
     TaskBase::updateHook();
 
     bool needsReplan = false;
+    
 
     // Receive map.
     RTT::FlowStatus ret = receiveEnvireData();
     if (ret == RTT::NoData) {
+        RTT::log(RTT::Info) <<  "No envire data has been received yet, return" << RTT::endlog();
         return;
     }
 
@@ -123,8 +125,8 @@ void Task::updateHook()
         RTT::log(RTT::Info) <<  "Received new environment data" << RTT::endlog();
         needsReplan = true;
         
-        // New map data received, send the current dstar lite trav map if the port is connected.
-        if(_internal_trav_map.connected()) {
+        // New map data received, send the current dstar lite trav map if create_debug_outputs is set to true.
+        if(_create_debug_outputs.get()) {
             sendInternalDStarLiteMap();
         }
     }
@@ -135,17 +137,19 @@ void Task::updateHook()
         if (_robot_pose_in.read(robotPose) == RTT::NewData)
         {
             mStartPos = robotPose.position;  
-            // Recalculate the trajectory if the distance exceeds a threshold
-            base::Vector3d p1 = robotPose.position;
-            base::Vector3d p2 = mLastStartPosition;
-            p1.z() = p2.z() = 0;
+            // Recalculate the trajectory if the distance exceeds a threshold (if distance > 0)
+            if(_recalculate_trajectory_distance_threshold.get() > 0) {
+                base::Vector3d p1 = robotPose.position;
+                base::Vector3d p2 = mLastStartPosition;
+                p1.z() = p2.z() = 0;
 
-            double distance = (p1 -p2).norm();
-            if(distance > _recalculate_trajectory_distance_threshold.get() && 
-                    _replanning_on_new_start_position.get()) {  
-                RTT::log(RTT::Info) << "Trajectory will be recalculated, distance to last position of recalculation (" <<
-                        distance << ") exceeds threshold" << RTT::endlog();
-                needsReplan = true;
+                double distance = (p1 -p2).norm();
+                if(distance > _recalculate_trajectory_distance_threshold.get() && 
+                        _replanning_on_new_start_position.get()) {  
+                    RTT::log(RTT::Info) << "Trajectory will be recalculated, distance to last position of recalculation (" <<
+                            distance << ") exceeds threshold" << RTT::endlog();
+                    needsReplan = true;
+                }
             }
         }
     }
@@ -153,6 +157,7 @@ void Task::updateHook()
     {
         ret = _start_position_in.read(mStartPos);
         if (ret == RTT::NoData) {
+            RTT::log(RTT::Info) <<  "Received no start position, return" << RTT::endlog();
             return;
         }
 
@@ -166,6 +171,7 @@ void Task::updateHook()
     // Receive goal position.
     ret = _target_position_in.read(mGoalPos);
     if (ret == RTT::NoData) {
+        RTT::log(RTT::Info) <<  "Received no goal position yet" << RTT::endlog();
         return;
     }
 
@@ -185,7 +191,6 @@ void Task::updateHook()
 
     if(needsReplan) {
         RTT::log(RTT::Info) << "Planning" << RTT::endlog();
-        
         // Check whether the last map update has placed an obstacle on the goal position.
         double goal_cost = 1.0;
         if(mPlanner->getCost(mGoalPos[0], mGoalPos[1], goal_cost) && goal_cost == -1) {
@@ -262,7 +267,6 @@ void Task::updateHook()
                 default: break;
             }
         }
-
         RTT::log(RTT::Info) << "Planning Done" << RTT::endlog();
         mLastReplanTime = currentTime;
     }
@@ -416,7 +420,7 @@ void Task::sendInternalDStarLiteMap() {
             }
         }
     } 
-    envire::OrocosEmitter emitter_tmp(&env_tmp, _internal_trav_map);
+    envire::OrocosEmitter emitter_tmp(&env_tmp, _debug_internal_trav_map);
     emitter_tmp.setTime(base::Time::now());
     emitter_tmp.flush();
 }

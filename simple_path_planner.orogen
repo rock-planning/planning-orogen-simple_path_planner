@@ -20,7 +20,7 @@ task_context "Task" do
         doc("Try to extract this traversability map, otherwise the first traversability map will be used (if it is the only one)")
 
     property("recalculate_trajectory_distance_threshold", "double", 0.2).
-        doc("If the distance between the current robot position and its position during the last recalculation exceeds this threshold, the trajectory will be recalculated")
+        doc("If the distance between the current robot position and its position during the last recalculation exceeds this threshold, the trajectory will be recalculated. Set to 0 to disable.")
 
     property("replan_timeout_ms", "int", 0).
         doc("Used to initiate replannig after the defined amount of time (in milliseconds), set to 0 to disable")
@@ -33,6 +33,9 @@ task_context "Task" do
         
     property("replanning_on_new_start_position", "bool", false).
         doc("By default only a new map or a new goal position initiates a replanning")
+        
+    property("create_debug_outputs", "bool", false).
+        doc("If set to true the debug data will be created and sent")
 
     # Input
     input_port('envire_environment_in', ro_ptr('std/vector</envire/BinaryEvent>')).
@@ -54,13 +57,12 @@ task_context "Task" do
     output_port("trajectory_spline_out", "std::vector</base/Trajectory>").
         doc("Trajectory from goal to start, special wrapping for the trajectory follower")
         
-    output_port('internal_trav_map', ro_ptr('std/vector</envire/BinaryEvent>')).
+    output_port('debug_internal_trav_map', ro_ptr('std/vector</envire/BinaryEvent>')).
         doc("Internally used DStarLite traversability map. This port should only be connected for testing.")
 
-    periodic(0.1)
+    port_driven
 end
 
 deployment "simple_path_planner_deployment" do
-    task("simple_path_planner", "Task").
-        periodic(0.9)
+    task("simple_path_planner", "Task")
 end
