@@ -178,7 +178,9 @@ void Task::updateHook()
     if (ret == RTT::NewData)
     {
         RTT::log(RTT::Info) <<  "Received goal position: " << mGoalPos << RTT::endlog();
-        needsReplan = true;
+        if(_replanning_on_new_goal_position.get()) {
+            needsReplan = true;
+        }
     }
 
     // Initiate replanning if the robot stucks 

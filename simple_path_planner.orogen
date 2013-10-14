@@ -34,6 +34,9 @@ task_context "Task" do
     property("replanning_on_new_start_position", "bool", false).
         doc("By default only a new map or a new goal position initiates a replanning")
         
+    property("replanning_on_new_goal_position", "bool", true).
+        doc("If set to false by default only a new map will initiate a replanning")
+        
     property("create_debug_outputs", "bool", false).
         doc("If set to true the debug data will be created and sent")
 
