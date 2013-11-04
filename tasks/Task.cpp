@@ -192,6 +192,10 @@ void Task::updateHook()
     }    
 
     if(needsReplan) {
+        
+        _debug_start_pos.write(mStartPos);
+        _debug_goal_pos.write(mGoalPos);
+        
         RTT::log(RTT::Info) << "Planning" << RTT::endlog();
         // Check whether the last map update has placed an obstacle on the goal position.
         double goal_cost = 1.0;

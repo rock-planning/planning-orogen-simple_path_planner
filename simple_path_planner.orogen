@@ -63,6 +63,11 @@ task_context "Task" do
     output_port('debug_internal_trav_map', ro_ptr('std/vector</envire/BinaryEvent>')).
         doc("Internally used DStarLite traversability map. This port should only be connected for testing.")
 
+    output_port('debug_start_pos', 'base::Vector3d').
+        doc "Start position of current planning try"
+    output_port('debug_goal_pos', 'base::Vector3d').
+        doc "goal position of current planning try"
+
     port_driven
 end
 
