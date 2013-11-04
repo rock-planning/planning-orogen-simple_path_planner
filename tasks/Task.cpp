@@ -266,6 +266,10 @@ void Task::updateHook()
         {
             RTT::log(RTT::Warning) << "Trajectory could not be calculated, error " << 
                     mPlanningError << " has been returned" << RTT::endlog();
+                    
+            //write empty trajectopry to stop robot
+            _trajectory_spline_out.write(std::vector<base::Trajectory>());
+                    
             switch (mPlanningError) {
                 case nav_graph_search::DStarLite::GOAL_SET_ON_OBSTACLE: exception(GOAL_SET_ON_OBSTACLE); break;
                 case nav_graph_search::DStarLite::OBSTACLE_SET_ON_GOAL: exception(OBSTACLE_SET_ON_GOAL); break;
