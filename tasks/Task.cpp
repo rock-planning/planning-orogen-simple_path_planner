@@ -200,6 +200,9 @@ void Task::updateHook()
         // Check whether the last map update has placed an obstacle on the goal position.
         double goal_cost = 1.0;
         if(mPlanner->getCost(mGoalPos[0], mGoalPos[1], goal_cost) && goal_cost == -1) {
+            //write empty trajectory to stop robot
+            _trajectory_spline_out.write(std::vector<base::Trajectory>());                    
+
             RTT::log(RTT::Warning) << "An obstacle has been placed on the goal position (" <<
                     mGoalPos[0] << ", " << mGoalPos[1] << ")" << RTT::endlog(); 
             exception(OBSTACLE_SET_ON_GOAL);  
@@ -267,7 +270,7 @@ void Task::updateHook()
             RTT::log(RTT::Warning) << "Trajectory could not be calculated, error " << 
                     mPlanningError << " has been returned" << RTT::endlog();
                     
-            //write empty trajectopry to stop robot
+            //write empty trajectory to stop robot
             _trajectory_spline_out.write(std::vector<base::Trajectory>());
                     
             switch (mPlanningError) {
