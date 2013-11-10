@@ -93,6 +93,7 @@ bool Task::configureHook()
     
     delete mPlanner;
     mPlanner = new nav_graph_search::DStarLite(classList);
+    mPlanner->setRemoveObstaclesRadius(_remove_obstacles_radius.get());
     
     mEnv = new envire::Environment();
     
@@ -264,6 +265,7 @@ void Task::updateHook()
 
             // Store the recalculated-trajectory-position.
             mLastStartPosition = mStartPos;
+            RTT::log(RTT::Info) << "Planning done successfully" << RTT::endlog();
         }
         else
         {
@@ -277,10 +279,12 @@ void Task::updateHook()
                 case nav_graph_search::DStarLite::GOAL_SET_ON_OBSTACLE: exception(GOAL_SET_ON_OBSTACLE); break;
                 case nav_graph_search::DStarLite::OBSTACLE_SET_ON_GOAL: exception(OBSTACLE_SET_ON_GOAL); break;
                 case nav_graph_search::DStarLite::NO_PATH_TO_GOAL: exception(NO_PATH_TO_GOAL); break;
+                case nav_graph_search::DStarLite::START_OUT_OF_GRID: exception(START_OUT_OF_GRID); break;
+                case nav_graph_search::DStarLite::GOAL_OUT_OF_GRID: exception(GOAL_OUT_OF_GRID); break;
                 default: break;
             }
         }
-        RTT::log(RTT::Info) << "Planning Done" << RTT::endlog();
+        
         mLastReplanTime = currentTime;
     }
 }
