@@ -192,7 +192,7 @@ void Task::updateHook()
         RTT::log(RTT::Info) << "SimplePathPlanner: Planning" << RTT::endlog();
         // Check whether the last map update has placed an obstacle on the goal position.
         double goal_cost = 1.0;
-        if(mPlanner->getCost(mGoalPos[0], mGoalPos[1], goal_cost) && goal_cost == -1) {
+        if(mPlanner->getCostWorld(mGoalPos[0], mGoalPos[1], goal_cost) && goal_cost == -1) {
             //write empty trajectory to stop robot
             _trajectory_spline_out.write(std::vector<base::Trajectory>());                    
 
