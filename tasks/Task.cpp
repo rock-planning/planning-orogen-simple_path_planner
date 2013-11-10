@@ -38,9 +38,6 @@ Task::Task(std::string const& name, RTT::ExecutionEngine* engine)
 
 Task::~Task()
 {
-    delete mPlanner; mPlanner = NULL;
-    delete mEnv; mEnv = NULL;
-    delete mFirstReceivedTravMap; mFirstReceivedTravMap = NULL;
 }
 
 bool Task::configureHook()
@@ -48,13 +45,9 @@ bool Task::configureHook()
     if (! TaskBase::configureHook()) {
         return false;
     }
-
-    // Delete old mls grids.
-    mMlsGrid.reset();
     
     // We did not get a map yet.
     mTraversabilityMapStatus = RTT::NoData;    
-    mLastReplanTime = base::Time();
 
     // Try to load the terrain classes.
     std::list<nav_graph_search::TerrainClass> classList;
@@ -91,10 +84,12 @@ bool Task::configureHook()
     
     RTT::log(RTT::Info) << nav_graph_search::TerrainClass::toString(classList) << RTT::endlog();
     
-    delete mPlanner;
     mPlanner = new nav_graph_search::DStarLite(classList);
+<<<<<<< HEAD
     mPlanner->setRemoveObstaclesRadius(_remove_obstacles_radius.get());
     
+=======
+>>>>>>> c58b2017633838240842dc0681be0dfa931c35c9
     mEnv = new envire::Environment();
     
     return true;
@@ -440,4 +435,18 @@ void Task::sendInternalDStarLiteMap() {
     envire::OrocosEmitter emitter_tmp(&env_tmp, _debug_internal_trav_map);
     emitter_tmp.setTime(base::Time::now());
     emitter_tmp.flush();
+}
+
+void Task::cleanupHook() {
+    RTT::log(RTT::Info) << "Cleanup being called" << RTT::endlog();
+    delete mPlanner; mPlanner = NULL;
+    delete mEnv; mEnv = NULL;
+    delete mFirstReceivedTravMap; mFirstReceivedTravMap = NULL;
+
+    // Delete old mls grids.
+    mMlsGrid.reset();
+    mStartPos = base::Vector3d::Zero();
+    mGoalPos = base::Vector3d::Zero();
+    mLastReplanTime = base::Time(); 
+    mLastStartPosition = base::Vector3d::Zero();
 }
