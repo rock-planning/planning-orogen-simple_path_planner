@@ -57,7 +57,7 @@ bool Task::configureHook()
             throw std::runtime_error("terrain class list empty");
         }
     } catch (std::runtime_error& e) {
-        RTT::log(RTT::Warning) << e.what() << ", default terrain classes will be used instead" << RTT::endlog();
+        RTT::log(RTT::Warning) << "SimplePathPlanner: " << e.what() << ", default terrain classes will be used instead" << RTT::endlog();
 
         nav_graph_search::TerrainClass unknown;
         unknown.cost = 1.5;
@@ -85,11 +85,8 @@ bool Task::configureHook()
     RTT::log(RTT::Info) << nav_graph_search::TerrainClass::toString(classList) << RTT::endlog();
     
     mPlanner = new nav_graph_search::DStarLite(classList);
-<<<<<<< HEAD
     mPlanner->setRemoveObstaclesRadius(_remove_obstacles_radius.get());
     
-=======
->>>>>>> c58b2017633838240842dc0681be0dfa931c35c9
     mEnv = new envire::Environment();
     
     return true;
@@ -112,13 +109,13 @@ void Task::updateHook()
     // Receive map.
     RTT::FlowStatus ret = receiveEnvireData();
     if (ret == RTT::NoData) {
-        RTT::log(RTT::Info) <<  "No envire data has been received yet, return" << RTT::endlog();
+        RTT::log(RTT::Info) <<  "SimplePathPlanner: No envire data has been received yet, return" << RTT::endlog();
         return;
     }
 
     if (ret == RTT::NewData)
     {
-        RTT::log(RTT::Info) <<  "Received new environment data" << RTT::endlog();
+        RTT::log(RTT::Info) <<  "SimplePathPlanner: Received new environment data" << RTT::endlog();
         needsReplan = true;
         
         // New map data received, send the current dstar lite trav map if create_debug_outputs is set to true.
@@ -142,7 +139,7 @@ void Task::updateHook()
                 double distance = (p1 -p2).norm();
                 if(distance > _recalculate_trajectory_distance_threshold.get() && 
                         _replanning_on_new_start_position.get()) {  
-                    RTT::log(RTT::Info) << "Trajectory will be recalculated, distance to last position of recalculation (" <<
+                    RTT::log(RTT::Info) << "SimplePathPlanner: Trajectory will be recalculated, distance to last position of recalculation (" <<
                             distance << ") exceeds threshold" << RTT::endlog();
                     needsReplan = true;
                 }
@@ -153,13 +150,13 @@ void Task::updateHook()
     {
         ret = _start_position_in.read(mStartPos);
         if (ret == RTT::NoData) {
-            RTT::log(RTT::Info) <<  "Received no start position, return" << RTT::endlog();
+            RTT::log(RTT::Info) <<  "SimplePathPlanner: Received no start position, return" << RTT::endlog();
             return;
         }
 
         if (ret == RTT::NewData  && _replanning_on_new_start_position.get())
         {
-            RTT::log(RTT::Info) <<  "Received start position: " << mStartPos << RTT::endlog();
+            RTT::log(RTT::Info) <<  "SimplePathPlanner: Received start position: " << mStartPos << RTT::endlog();
             needsReplan = true;
         }
     }
@@ -167,7 +164,7 @@ void Task::updateHook()
     // Receive goal position.
     ret = _target_position_in.read(mGoalPos);
     if (ret == RTT::NoData) {
-        RTT::log(RTT::Info) <<  "Received no goal position yet" << RTT::endlog();
+        RTT::log(RTT::Info) <<  "SimplePathPlanner: Received no goal position yet" << RTT::endlog();
         return;
     }
 
@@ -183,7 +180,7 @@ void Task::updateHook()
     base::Time currentTime = base::Time::now();
     if(_replan_timeout_ms.get() > 0 && 
             (currentTime - mLastReplanTime).toMilliseconds() > _replan_timeout_ms.get()) {
-        RTT::log(RTT::Info) << "Replanning initiated, robot did not change its position for " << _replan_timeout_ms.get() << " msec" << RTT::endlog();
+        RTT::log(RTT::Info) << "SimplePathPlanner: Replanning initiated, robot did not change its position for " << _replan_timeout_ms.get() << " msec" << RTT::endlog();
         needsReplan = true;
     }    
 
@@ -192,14 +189,14 @@ void Task::updateHook()
         _debug_start_pos.write(mStartPos);
         _debug_goal_pos.write(mGoalPos);
         
-        RTT::log(RTT::Info) << "Planning" << RTT::endlog();
+        RTT::log(RTT::Info) << "SimplePathPlanner: Planning" << RTT::endlog();
         // Check whether the last map update has placed an obstacle on the goal position.
         double goal_cost = 1.0;
         if(mPlanner->getCost(mGoalPos[0], mGoalPos[1], goal_cost) && goal_cost == -1) {
             //write empty trajectory to stop robot
             _trajectory_spline_out.write(std::vector<base::Trajectory>());                    
 
-            RTT::log(RTT::Warning) << "An obstacle has been placed on the goal position (" <<
+            RTT::log(RTT::Warning) << "SimplePathPlanner: An obstacle has been placed on the goal position (" <<
                     mGoalPos[0] << ", " << mGoalPos[1] << ")" << RTT::endlog(); 
             exception(OBSTACLE_SET_ON_GOAL);  
         }
@@ -217,7 +214,7 @@ void Task::updateHook()
                     if(mMlsGrid->toGrid(*it_map, grid_pos.x, grid_pos.y)) {
                         trajectory_mls_grid.push_back(grid_pos);
                     } else {
-                        RTT::log(RTT::Warning) << "Trajectory is outside of the MLSGrid which is most probably a bug" << RTT::endlog();    
+                        RTT::log(RTT::Warning) << "SimplePathPlanner: Trajectory is outside of the MLSGrid which is most probably a bug" << RTT::endlog();    
                     }
                 }
    
@@ -240,7 +237,7 @@ void Task::updateHook()
             _trajectory_out.write(trajectory_map);
             
             std::stringstream oss;
-            oss << "Calculated trajectory: " << std::endl;
+            oss << "SimplePathPlanner: Calculated trajectory: " << std::endl;
             for(unsigned int i = 0; i < trajectory_map.size(); ++i) {
                 oss << "(" << trajectory_map[i][0] << ", " << 
                         trajectory_map[i][1] << ", " <<  
@@ -260,11 +257,11 @@ void Task::updateHook()
 
             // Store the recalculated-trajectory-position.
             mLastStartPosition = mStartPos;
-            RTT::log(RTT::Info) << "Planning done successfully" << RTT::endlog();
+            RTT::log(RTT::Info) << "SimplePathPlanner: Planning done successfully" << RTT::endlog();
         }
         else
         {
-            RTT::log(RTT::Warning) << "Trajectory could not be calculated, error " << 
+            RTT::log(RTT::Warning) << "SimplePathPlanner: Trajectory could not be calculated, error " << 
                     mPlanningError << " has been returned" << RTT::endlog();
                     
             //write empty trajectory to stop robot
@@ -287,7 +284,7 @@ void Task::updateHook()
 void Task::stopHook() {
     std::string path = _statistics_path.get();
     if(!path.empty()){
-        RTT::log(RTT::Info) << "Writing path planning statistics to " << path << RTT::endlog();
+        RTT::log(RTT::Info) << "SimplePathPlanner: Writing path planning statistics to " << path << RTT::endlog();
         std::ofstream stat_file;
         stat_file.open(path.c_str());
         std::string stat_str = mPlanner->getStatistics().toString();
@@ -335,7 +332,7 @@ bool Task::extractTraversability() {
     // Lists all received traversability maps.
     std::stringstream ss;
     if(maps.size()) {
-        ss << "Received traversability map(s): " << std::endl;
+        ss << "SimplePathPlanner: Received traversability map(s): " << std::endl;
  
         std::string trav_map_id;
         std::vector<envire::TraversabilityGrid*>::iterator it = maps.begin();
@@ -345,7 +342,7 @@ bool Task::extractTraversability() {
         }
         RTT::log(RTT::Info) << ss.str() << RTT::endlog(); 
     } else {
-        RTT::log(RTT::Warning) << "Environment does not contain any traversability grids" << RTT::endlog();
+        RTT::log(RTT::Warning) << "SimplePathPlanner: Environment does not contain any traversability grids" << RTT::endlog();
         return false;
     }
 
@@ -354,24 +351,24 @@ bool Task::extractTraversability() {
             mEnv->getItem< envire::TraversabilityGrid >(_traversability_map_id.get()).get();
     if (!traversability)
     {
-        RTT::log(RTT::Info) << "No traversability map with id" << _traversability_map_id.get() << RTT::endlog();
+        RTT::log(RTT::Info) << "SimplePathPlanner: No traversability map with id" << _traversability_map_id.get() << RTT::endlog();
         if(maps.size() > 1) {
-            RTT::log(RTT::Warning) << "The environment contains more than one traversability map, please specify the map ID" << RTT::endlog();
+            RTT::log(RTT::Warning) << "SimplePathPlanner: The environment contains more than one traversability map, please specify the map ID" << RTT::endlog();
             return false;
         } else {
-            RTT::log(RTT::Info) << "The first traversability map will be used" << RTT::endlog();
+            RTT::log(RTT::Info) << "SimplePathPlanner: The first traversability map will be used" << RTT::endlog();
             std::vector<envire::TraversabilityGrid*>::iterator it = maps.begin();
             traversability = mEnv->getItem< envire::TraversabilityGrid >((*it)->getUniqueId()).get();
             if (!traversability)
             {
-                RTT::log(RTT::Warning) << "Traversability map '" << (*it)->getUniqueId() << 
+                RTT::log(RTT::Warning) << "SimplePathPlanner: Traversability map '" << (*it)->getUniqueId() << 
                         "' could not be extracted" << RTT::endlog();
                 return false;
             } 
         }
     } 
     
-    RTT::log(RTT::Info) << "Traversability map " << traversability->getUniqueId() << " extracted" << RTT::endlog();
+    RTT::log(RTT::Info) << "SimplePathPlanner: Traversability map " << traversability->getUniqueId() << " extracted" << RTT::endlog();
     
     // Adds the trav map to the planner.
     mPlanner->updateTraversabilityMap(traversability);
@@ -383,7 +380,7 @@ bool Task::extractMLS() {
     std::vector<envire::MLSGrid*> mls_maps = mEnv->getItems<envire::MLSGrid>();
     if(mls_maps.size()) {
         std::stringstream ss;
-        ss << "Received MLS map(s): " << std::endl;
+        ss << "SimplePathPlanner: Received MLS map(s): " << std::endl;
         std::vector<envire::MLSGrid*>::iterator it = mls_maps.begin();
         for(int i=0; it != mls_maps.end(); ++it, ++i)
         {
@@ -391,7 +388,7 @@ bool Task::extractMLS() {
         }
         RTT::log(RTT::Info) << ss.str() << RTT::endlog();
     } else {
-        RTT::log(RTT::Info) << "Environment does not contain any MLS grids" << RTT::endlog();
+        RTT::log(RTT::Info) << "SimplePathPlanner: Environment does not contain any MLS grids" << RTT::endlog();
         return false;
     }
     
@@ -401,11 +398,11 @@ bool Task::extractMLS() {
         if(new_mls_grid)
         {
             mMlsGrid = new_mls_grid;
-            RTT::log(RTT::Info) << "MLS Grid " <<  new_mls_grid->getUniqueId() << 
+            RTT::log(RTT::Info) << "SimplePathPlanner: MLS Grid " <<  new_mls_grid->getUniqueId() << 
                     " extracted" << RTT::endlog();
         }
     } catch (std::exception e) {
-        RTT::log(RTT::Warning) << "MLS Grid could not be extracted: " << 
+        RTT::log(RTT::Warning) << "SimplePathPlanner: MLS Grid could not be extracted: " << 
             e.what() << RTT::endlog();
         return false;
     }
@@ -413,7 +410,7 @@ bool Task::extractMLS() {
 }
 
 void Task::sendInternalDStarLiteMap() {
-    RTT::log(RTT::Info) <<  "Send internal dstar lite trav map" << RTT::endlog();
+    RTT::log(RTT::Info) <<  "SimplePathPlanner: Send internal dstar lite trav map" << RTT::endlog();
     envire::Environment env_tmp;
     // Copy first received trav map.
     envire::TraversabilityGrid* trav_grid_tmp = new envire::TraversabilityGrid(*(mPlanner->getRootTravMap()));
@@ -438,7 +435,7 @@ void Task::sendInternalDStarLiteMap() {
 }
 
 void Task::cleanupHook() {
-    RTT::log(RTT::Info) << "Cleanup being called" << RTT::endlog();
+    RTT::log(RTT::Info) << "SimplePathPlanner: Cleanup being called" << RTT::endlog();
     delete mPlanner; mPlanner = NULL;
     delete mEnv; mEnv = NULL;
     delete mFirstReceivedTravMap; mFirstReceivedTravMap = NULL;
