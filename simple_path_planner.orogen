@@ -10,7 +10,7 @@ import_types_from "envire"
 task_context "Task" do
     needs_configuration
     
-    error_states 'GOAL_SET_ON_OBSTACLE', 'OBSTACLE_SET_ON_GOAL', 'NO_PATH_TO_GOAL', 'START_OUT_OF_GRID', 'GOAL_OUT_OF_GRID'
+    exception_states 'GOAL_SET_ON_OBSTACLE', 'OBSTACLE_SET_ON_GOAL', 'NO_PATH_TO_GOAL', 'START_OUT_OF_GRID', 'GOAL_OUT_OF_GRID'
 
     # Properties
     property("terrain_classes_path", "std/string", "./terrain_classes.txt").
