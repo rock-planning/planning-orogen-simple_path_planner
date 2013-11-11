@@ -117,11 +117,6 @@ void Task::updateHook()
     {
         RTT::log(RTT::Info) <<  "SimplePathPlanner: Received new environment data" << RTT::endlog();
         needsReplan = true;
-        
-        // New map data received, send the current dstar lite trav map if create_debug_outputs is set to true.
-        if(_create_debug_outputs.get()) {
-            sendInternalDStarLiteMap();
-        }
     }
 
     // Receive start position. Prioritizes robot pose.
@@ -235,6 +230,11 @@ void Task::updateHook()
             }
                 
             _trajectory_out.write(trajectory_map);
+
+            // New map data received, send the current dstar lite trav map if create_debug_outputs is set to true.
+            if(_create_debug_outputs.get()) {
+                sendInternalDStarLiteMap();
+            }
             
             std::stringstream oss;
             oss << "SimplePathPlanner: Calculated trajectory: " << std::endl;
