@@ -10,7 +10,7 @@ import_types_from "envire"
 task_context "Task" do
     needs_configuration
     
-    exception_states 'GOAL_SET_ON_OBSTACLE', 'OBSTACLE_SET_ON_GOAL', 'NO_PATH_TO_GOAL', 'START_OUT_OF_GRID', 'GOAL_OUT_OF_GRID'
+    exception_states 'GOAL_ON_OBSTACLE', 'NO_PATH_TO_GOAL', 'START_OUT_OF_GRID', 'GOAL_OUT_OF_GRID'
 
     # Properties
     property("terrain_classes_path", "std/string", "./terrain_classes.txt").
@@ -42,6 +42,9 @@ task_context "Task" do
 
     property("remove_obstacles_radius", "double", 0.0).
         doc("If > 0 before each planning within the surrounding area of the robot the obstacles will be removed, radius in meter")
+        
+    property("avoid_obstacles_on_goal", "bool", false).
+        doc("If set to true and the goal position is set on an obstacle it will be moved towards the start position until a free cell has been found")    
 
     # Input
     input_port('envire_environment_in', ro_ptr('std/vector</envire/BinaryEvent>')).

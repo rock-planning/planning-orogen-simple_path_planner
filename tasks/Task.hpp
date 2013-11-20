@@ -145,6 +145,11 @@ class Task : public TaskBase
      * This should only be used for testing.
      */
     void sendInternalDStarLiteMap();
+    
+    /**
+     * Find next valid goal position.
+     */
+    bool findNextValidGoalPosition();
 };
 }
 

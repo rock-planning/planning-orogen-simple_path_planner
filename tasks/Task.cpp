@@ -165,7 +165,7 @@ void Task::updateHook()
 
     if (ret == RTT::NewData)
     {
-        RTT::log(RTT::Info) <<  "Received goal position: " << mGoalPos << RTT::endlog();
+        RTT::log(RTT::Info) <<  "SimplePathPlanner: Received goal position: " << mGoalPos << RTT::endlog();
         if(_replanning_on_new_goal_position.get()) {
             needsReplan = true;
         }
@@ -185,15 +185,26 @@ void Task::updateHook()
         _debug_goal_pos.write(mGoalPos);
         
         RTT::log(RTT::Info) << "SimplePathPlanner: Planning" << RTT::endlog();
-        // Check whether the last map update has placed an obstacle on the goal position.
+        // Check whether there is an obstacle on the goal position.
         double goal_cost = 1.0;
         if(mPlanner->getCostWorld(mGoalPos[0], mGoalPos[1], goal_cost) && goal_cost == -1) {
-            //write empty trajectory to stop robot
-            _trajectory_spline_out.write(std::vector<base::Trajectory>());                    
+            
+            bool goal_valid = false;
+            if(_avoid_obstacles_on_goal.get()){
+                goal_valid = findNextValidGoalPosition();
+            }
+        
+            if(!goal_valid) {
+                //write empty trajectory to stop robot
+                _trajectory_spline_out.write(std::vector<base::Trajectory>());                    
 
-            RTT::log(RTT::Warning) << "SimplePathPlanner: An obstacle has been placed on the goal position (" <<
-                    mGoalPos[0] << ", " << mGoalPos[1] << ")" << RTT::endlog(); 
-            exception(OBSTACLE_SET_ON_GOAL);  
+                RTT::log(RTT::Warning) << "SimplePathPlanner: There is an obstacle on the goal position (" <<
+                        mGoalPos[0] << ", " << mGoalPos[1] << ")" << RTT::endlog(); 
+                exception(GOAL_ON_OBSTACLE);  
+                return;
+            } else {
+                RTT::log(RTT::Info) << "SimplePathPlanner: The goal position has been moved to the next valid cell towards the start" << RTT::endlog(); 
+            }
         }
 
         if(mPlanner->run(mStartPos, mGoalPos, &mPlanningError))
@@ -268,8 +279,7 @@ void Task::updateHook()
             _trajectory_spline_out.write(std::vector<base::Trajectory>());
                     
             switch (mPlanningError) {
-                case nav_graph_search::DStarLite::GOAL_SET_ON_OBSTACLE: exception(GOAL_SET_ON_OBSTACLE); break;
-                case nav_graph_search::DStarLite::OBSTACLE_SET_ON_GOAL: exception(OBSTACLE_SET_ON_GOAL); break;
+                case nav_graph_search::DStarLite::GOAL_ON_OBSTACLE: exception(GOAL_ON_OBSTACLE); break;
                 case nav_graph_search::DStarLite::NO_PATH_TO_GOAL: exception(NO_PATH_TO_GOAL); break;
                 case nav_graph_search::DStarLite::START_OUT_OF_GRID: exception(START_OUT_OF_GRID); break;
                 case nav_graph_search::DStarLite::GOAL_OUT_OF_GRID: exception(GOAL_OUT_OF_GRID); break;
@@ -446,4 +456,43 @@ void Task::cleanupHook() {
     mGoalPos = base::Vector3d::Zero();
     mLastReplanTime = base::Time(); 
     mLastStartPosition = base::Vector3d::Zero();
+}
+    
+bool Task::findNextValidGoalPosition() {
+    RTT::log(RTT::Info) << "SimplePathPlanner: findNextValidGoalPosition()" << RTT::endlog();
+
+    base::geometry::Spline<3> spline;
+    std::vector<base::Vector3d> traj;
+    base::Vector3d goal_pos_cpy = mGoalPos;
+    goal_pos_cpy.z() = 0;
+    base::Vector3d start_pos_cpy = mStartPos;
+    start_pos_cpy.z() = 0;
+    traj.push_back(goal_pos_cpy);
+    traj.push_back(start_pos_cpy);
+    spline.interpolate(traj);
+    double pos_spline = 0;
+    double length_spline = (goal_pos_cpy - start_pos_cpy).norm();
+    double scale = mFirstReceivedTravMap == NULL ? 0.1 : mFirstReceivedTravMap->getScaleX();
+    base::Vector3d new_goal; 
+    double cost = 1.0;
+
+    // Run from goal to start searching for the first non-obstacle point.
+    while(pos_spline < length_spline) {
+        std::pair<double, double> ret_advance = spline.advance(pos_spline, scale, scale);
+        new_goal = spline.getPoint(ret_advance.first);
+
+        if(mPlanner->getCostWorld(new_goal[0], new_goal[1], cost) && cost == -1) {
+            // Found obstacle, proceed.
+            pos_spline += scale;
+            continue;
+        } else {
+            // Found valid new goal position.
+            RTT::log(RTT::Info) << "SimplePathPlanner: Goal position have been moved " << (mGoalPos - new_goal).norm() << 
+                    " meters from " << mGoalPos.transpose() << " to " << new_goal.transpose() << RTT::endlog();
+            mGoalPos = new_goal;
+            return true;
+        }
+    }
+    RTT::log(RTT::Warning) << "SimplePathPlanner: Could not find a new valid goal position" << RTT::endlog(); 
+    return false;   
 }
