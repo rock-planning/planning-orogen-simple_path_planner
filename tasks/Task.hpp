@@ -31,6 +31,7 @@ class Task : public TaskBase
     base::Vector3d mGoalPos;
     /** Time of the last planning. */
     base::Time mLastReplanTime;
+    
     /** Start position of last planning. */
     base::Vector3d mLastStartPosition;
     /**
@@ -45,6 +46,24 @@ class Task : public TaskBase
     envire::Environment* mEnv;
     envire::TraversabilityGrid* mFirstReceivedTravMap;
     nav_graph_search::DStarLite::Error mPlanningError;
+    
+    void transformationCallback(const base::Time& ts, transformer::Transformation& tr, Eigen::Affine3d& value, bool& gotIt);
+    
+    ///Last transformation from body to trajectory coorinate frame
+    Eigen::Affine3d bodyCenter2Trajectory;
+
+    ///Last transformation from body to map coorinate frame
+    Eigen::Affine3d bodyCenter2Map;
+
+    ///Last transformation from body to global trajectorie coorinate frame
+    Eigen::Affine3d bodyCenter2InputPosition;
+
+    bool gotBodyCenter2Trajectory;
+    bool gotBodyCenter2InputPosition;
+    bool gotBodyCenter2Map;
+
+    bool needsReplan;
+    
  public:
     /** 
      * TaskContext constructor for Task
@@ -83,7 +102,7 @@ class Task : public TaskBase
      * stay in Stopped. Otherwise, it goes into Running and updateHook()
      * will be called.
      */
-    // bool startHook();
+    bool startHook();
 
     /** This hook is called by Orocos when the component is in the Running
      * state, at each activity step. Here, the activity gives the "ticks"
@@ -139,12 +158,6 @@ class Task : public TaskBase
      * trajectory.
      */
     bool extractMLS();
-    
-    /**
-     * Requests the dstar lite map and send it as an envire traversability map.
-     * This should only be used for testing.
-     */
-    void sendInternalDStarLiteMap();
     
     /**
      * Find next valid goal position.

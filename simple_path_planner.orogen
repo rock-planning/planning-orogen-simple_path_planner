@@ -12,13 +12,6 @@ task_context "Task" do
     
     exception_states 'GOAL_ON_OBSTACLE', 'NO_PATH_TO_GOAL', 'START_OUT_OF_GRID', 'GOAL_OUT_OF_GRID'
 
-    # Properties
-    property("terrain_classes_path", "std/string", "./terrain_classes.txt").
-        doc("Path to the terrain class definition file")
-
-    property("traversability_map_id", "std/string", "/traversability").
-        doc("Try to extract this traversability map, otherwise the first traversability map will be used (if it is the only one)")
-
     property("recalculate_trajectory_distance_threshold", "double", 0.2).
         doc("If the distance between the current robot position and its position during the last recalculation exceeds this threshold, the trajectory will be recalculated. Set to 0 to disable.")
 
@@ -53,20 +46,25 @@ task_context "Task" do
     input_port('target_position_in', 'base/Vector3d').
         doc "Target position in the world, just using x and y"
 
-    input_port("robot_pose_in", "base/samples/RigidBodyState").
-        doc "Position and orientation of the robot in the world, can be used to set the start position as well"
-
     # Output
-    output_port('trajectory_out', '/std/vector<base::Vector3d>').
-        doc "Trajectory from start to target position (or to the closest position within the known map), just using x and y"
-
-    output_port("trajectory_spline_out", "std::vector</base/Trajectory>").
+    output_port("trajectory_out", "std::vector</base/Trajectory>").
         doc("Trajectory from goal to start, special wrapping for the trajectory follower")
 
     output_port('debug_start_pos', 'base::Vector3d').
         doc "Start position of current planning try"
     output_port('debug_goal_pos', 'base::Vector3d').
         doc "goal position of current planning try"
+
+    transformer do
+        #Transformation from the body center point into the coordinate frame of the output trajectory
+        transformation("body_center", "trajectory")
+        #Transformation from the map to the body center point
+        transformation("body_center", "map")
+        #Transformation from the the body center to the input position
+        transformation("body_center", "input_position")
+
+        max_latency(0.1)
+    end
 
     port_driven
 end

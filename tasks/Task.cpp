@@ -40,6 +40,15 @@ Task::~Task()
 {
 }
 
+void Task::transformationCallback(const base::Time& ts, transformer::Transformation& tr, Eigen::Affine3d& value, bool& gotIt)
+{
+    if(!tr.get(ts, value, false))
+        return;
+    
+    gotIt = true;
+}
+
+
 bool Task::configureHook()
 {
     if (! TaskBase::configureHook()) {
@@ -49,62 +58,37 @@ bool Task::configureHook()
     // We did not get a map yet.
     mTraversabilityMapStatus = RTT::NoData;    
 
-    // Try to load the terrain classes.
-    std::list<nav_graph_search::TerrainClass> classList;
-    try {
-        classList = nav_graph_search::TerrainClass::load(_terrain_classes_path.get());
-        if(classList.empty()) {
-            throw std::runtime_error("terrain class list empty");
-        }
-    } catch (std::runtime_error& e) {
-        RTT::log(RTT::Warning) << "SimplePathPlanner: " << e.what() << ", default terrain classes will be used instead" << RTT::endlog();
-
-        nav_graph_search::TerrainClass unknown;
-        unknown.cost = 1.5;
-        unknown.out = 0;
-        unknown.name = "unknown";
-        nav_graph_search::TerrainClass obstacle;
-        obstacle.cost = -1;
-        obstacle.out = 1;
-        obstacle.name = "obstacle";
-
-        classList.push_back(unknown);
-        classList.push_back(obstacle);
-        
-        // Costs of 2 to 1.
-        for(int i = 2; i < 13; i++)
-        {
-            nav_graph_search::TerrainClass c;
-            c.cost = 2 - (i-2) / 10.0;  // 1 + i * 0.01 ;
-            c.out = i;
-            c.name = "slope";
-            classList.push_back(c);
-        }
-    }
-    
-    RTT::log(RTT::Info) << nav_graph_search::TerrainClass::toString(classList) << RTT::endlog();
-    
-    mPlanner = new nav_graph_search::DStarLite(classList);
+    mPlanner = new nav_graph_search::DStarLite();
     mPlanner->setRemoveObstaclesRadius(_remove_obstacles_radius.get());
     
     mEnv = new envire::Environment();
     
+    _body_center2map.registerUpdateCallback(
+        boost::bind(&Task::transformationCallback , this, _1, boost::ref(_body_center2map), boost::ref(bodyCenter2Map), boost::ref(gotBodyCenter2Map)));
+    _body_center2trajectory.registerUpdateCallback(
+        boost::bind(&Task::transformationCallback , this, _1, boost::ref(_body_center2trajectory), boost::ref(bodyCenter2Trajectory), boost::ref(gotBodyCenter2Trajectory)));
+    _body_center2input_position.registerUpdateCallback(boost::bind(&Task::transformationCallback , this, _1, boost::ref(_body_center2input_position), boost::ref(bodyCenter2InputPosition), boost::ref(gotBodyCenter2InputPosition)));
+
+    
     return true;
 }
 
-// bool Task::startHook()
-// {
-//     if (! TaskBase::startHook())
-//         return false;
-//     return true;
-// }
+bool Task::startHook()
+{
+    if (! TaskBase::startHook())
+        return false;
+    
+    gotBodyCenter2InputPosition = false;
+    gotBodyCenter2Map = false;
+    gotBodyCenter2Trajectory = false;
+
+    needsReplan = false;
+    return true;
+}
 
 void Task::updateHook()
 {
     TaskBase::updateHook();
-
-    bool needsReplan = false;
-    
 
     // Receive map.
     RTT::FlowStatus ret = receiveEnvireData();
@@ -119,29 +103,30 @@ void Task::updateHook()
         needsReplan = true;
     }
 
-    // Receive start position. Prioritizes robot pose.
-    base::samples::RigidBodyState robotPose;
-    if(_robot_pose_in.connected()) {
-        if (_robot_pose_in.read(robotPose) == RTT::NewData)
-        {
-            mStartPos = robotPose.position;  
-            // Recalculate the trajectory if the distance exceeds a threshold (if distance > 0)
-            if(_recalculate_trajectory_distance_threshold.get() > 0) {
-                base::Vector3d p1 = robotPose.position;
-                base::Vector3d p2 = mLastStartPosition;
-                p1.z() = p2.z() = 0;
-
-                double distance = (p1 -p2).norm();
-                if(distance > _recalculate_trajectory_distance_threshold.get() && 
-                        _replanning_on_new_start_position.get()) {  
-                    RTT::log(RTT::Info) << "SimplePathPlanner: Trajectory will be recalculated, distance to last position of recalculation (" <<
-                            distance << ") exceeds threshold" << RTT::endlog();
-                    needsReplan = true;
-                }
-            }
-        }
+    if(!gotBodyCenter2InputPosition || !gotBodyCenter2Map || !gotBodyCenter2Trajectory)
+    {
+        RTT::log(RTT::Info) <<  "SimplePathPlanner: Waiting for transformations" << RTT::endlog();
+        return;
     }
-    else 
+    
+    mStartPos = bodyCenter2Map.translation();
+    
+    // Recalculate the trajectory if the distance exceeds a threshold (if distance > 0)
+    if(_recalculate_trajectory_distance_threshold.get() > 0) {
+        base::Vector3d p1 = mStartPos;
+        base::Vector3d p2 = mLastStartPosition;
+        p1.z() = p2.z() = 0;
+
+        double distance = (p1 -p2).norm();
+        if(distance > _recalculate_trajectory_distance_threshold.get() && 
+                _replanning_on_new_start_position.get()) {  
+            RTT::log(RTT::Info) << "SimplePathPlanner: Trajectory will be recalculated, distance to last position of recalculation (" <<
+                    distance << ") exceeds threshold" << RTT::endlog();
+            needsReplan = true;
+        }
+    }        
+
+    if(_start_position_in.connected())
     {
         ret = _start_position_in.read(mStartPos);
         if (ret == RTT::NoData) {
@@ -180,14 +165,18 @@ void Task::updateHook()
     }    
 
     if(needsReplan) {
+        Eigen::Affine3d inputPosition2Map(bodyCenter2Map * bodyCenter2InputPosition.inverse());
+    
+        Eigen::Vector3d start_map = inputPosition2Map * mStartPos;
+        Eigen::Vector3d goal_map = inputPosition2Map * mGoalPos;
         
-        _debug_start_pos.write(mStartPos);
-        _debug_goal_pos.write(mGoalPos);
+        _debug_start_pos.write(start_map);
+        _debug_goal_pos.write(goal_map);
         
         RTT::log(RTT::Info) << "SimplePathPlanner: Planning" << RTT::endlog();
         // Check whether there is an obstacle on the goal position.
         double goal_cost = 1.0;
-        if(mPlanner->getCostWorld(mGoalPos[0], mGoalPos[1], goal_cost) && goal_cost == -1) {
+        if(mPlanner->getCostWorld(goal_map[0], goal_map[1], goal_cost) && goal_cost == -1) {
             
             bool goal_valid = false;
             if(_avoid_obstacles_on_goal.get()){
@@ -196,10 +185,10 @@ void Task::updateHook()
         
             if(!goal_valid) {
                 //write empty trajectory to stop robot
-                _trajectory_spline_out.write(std::vector<base::Trajectory>());                    
+                _trajectory_out.write(std::vector<base::Trajectory>());                    
 
                 RTT::log(RTT::Warning) << "SimplePathPlanner: There is an obstacle on the goal position (" <<
-                        mGoalPos[0] << ", " << mGoalPos[1] << ")" << RTT::endlog(); 
+                        goal_map[0] << ", " << goal_map[1] << ")" << RTT::endlog(); 
                 exception(GOAL_ON_OBSTACLE);  
                 return;
             } else {
@@ -207,7 +196,7 @@ void Task::updateHook()
             }
         }
 
-        if(mPlanner->run(mStartPos, mGoalPos, &mPlanningError))
+        if(mPlanner->run(start_map, goal_map, &mPlanningError))
         {
             std::vector<base::Vector3d> trajectory_map = mPlanner->getTrajectoryMap();
             std::vector<envire::GridBase::Position> trajectory_mls_grid;
@@ -239,10 +228,7 @@ void Task::updateHook()
                     trajectory_map.push_back(base::Vector3d(x,y, it->z()));
                 }
             }
-                
-            _trajectory_out.write(trajectory_map);
 
-            
             std::stringstream oss;
             oss << "SimplePathPlanner: Calculated trajectory: " << std::endl;
             for(unsigned int i = 0; i < trajectory_map.size(); ++i) {
@@ -260,7 +246,7 @@ void Task::updateHook()
             // which would be completed consecutively)
             std::vector<base::Trajectory> base_trajectory_vector;
             base_trajectory_vector.push_back(base_trajectory);
-            _trajectory_spline_out.write(base_trajectory_vector);
+            _trajectory_out.write(base_trajectory_vector);
 
             // Store the recalculated-trajectory-position.
             mLastStartPosition = mStartPos;
@@ -272,7 +258,7 @@ void Task::updateHook()
                     mPlanningError << " has been returned" << RTT::endlog();
                     
             //write empty trajectory to stop robot
-            _trajectory_spline_out.write(std::vector<base::Trajectory>());
+            _trajectory_out.write(std::vector<base::Trajectory>());
                     
             switch (mPlanningError) {
                 case nav_graph_search::DStarLite::GOAL_ON_OBSTACLE: exception(GOAL_ON_OBSTACLE); break;
@@ -283,6 +269,7 @@ void Task::updateHook()
             }
         }
         
+        needsReplan = false;
         mLastReplanTime = currentTime;
     }
 }
@@ -333,8 +320,6 @@ RTT::FlowStatus Task::receiveEnvireData()
 bool Task::extractTraversability() {
     std::vector<envire::TraversabilityGrid*> maps = mEnv->getItems<envire::TraversabilityGrid>();
     
-    mEnv->serialize("/tmp/env_tmp");
-    
     // Lists all received traversability maps.
     std::stringstream ss;
     if(maps.size()) {
@@ -352,27 +337,13 @@ bool Task::extractTraversability() {
         return false;
     }
 
-    // Extract traversability map from evironment.
-    envire::TraversabilityGrid* traversability =
-            mEnv->getItem< envire::TraversabilityGrid >(_traversability_map_id.get()).get();
-    if (!traversability)
-    {
-        RTT::log(RTT::Info) << "SimplePathPlanner: No traversability map with id" << _traversability_map_id.get() << RTT::endlog();
-        if(maps.size() > 1) {
-            RTT::log(RTT::Warning) << "SimplePathPlanner: The environment contains more than one traversability map, please specify the map ID" << RTT::endlog();
-            return false;
-        } else {
-            RTT::log(RTT::Info) << "SimplePathPlanner: The first traversability map will be used" << RTT::endlog();
-            std::vector<envire::TraversabilityGrid*>::iterator it = maps.begin();
-            traversability = mEnv->getItem< envire::TraversabilityGrid >((*it)->getUniqueId()).get();
-            if (!traversability)
-            {
-                RTT::log(RTT::Warning) << "SimplePathPlanner: Traversability map '" << (*it)->getUniqueId() << 
-                        "' could not be extracted" << RTT::endlog();
-                return false;
-            } 
-        }
-    } 
+    if(!maps.size() || maps.size() > 1) {
+        throw std::runtime_error("simple_path_planner::Task:Environment contains more than one TraversabilityGrid");
+    }
+    
+    envire::TraversabilityGrid* traversability = *(maps.begin());
+    if(!traversability->getFrameNode())
+        throw std::runtime_error("simple_path_planner::Task:Error, grid has no framenode");
     
     RTT::log(RTT::Info) << "SimplePathPlanner: Traversability map " << traversability->getUniqueId() << " extracted" << RTT::endlog();
     
