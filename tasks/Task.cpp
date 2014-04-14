@@ -242,10 +242,6 @@ void Task::updateHook()
                 
             _trajectory_out.write(trajectory_map);
 
-            // New map data received, send the current dstar lite trav map if create_debug_outputs is set to true.
-            if(_create_debug_outputs.get()) {
-                sendInternalDStarLiteMap();
-            }
             
             std::stringstream oss;
             oss << "SimplePathPlanner: Calculated trajectory: " << std::endl;
@@ -419,30 +415,30 @@ bool Task::extractMLS() {
     return true;
 }
 
-void Task::sendInternalDStarLiteMap() {
-    RTT::log(RTT::Info) <<  "SimplePathPlanner: Send internal dstar lite trav map" << RTT::endlog();
-    envire::Environment env_tmp;
-    // Copy first received trav map.
-    envire::TraversabilityGrid* trav_grid_tmp = new envire::TraversabilityGrid(*(mPlanner->getRootTravMap()));
-    env_tmp.attachItem(trav_grid_tmp);
-    envire::FrameNode* p_fn = new envire::FrameNode();
-    env_tmp.getRootNode()->addChild(p_fn);
-    trav_grid_tmp->setFrameNode(p_fn);
-
-    int terrain_class = 0;
-    envire::TraversabilityGrid::ArrayType& trav_array = trav_grid_tmp->getGridData();
-    for(size_t x=0; x < trav_grid_tmp->getCellSizeX(); ++x) {
-        for(size_t y=0; y < trav_grid_tmp->getCellSizeY(); ++y) {
-            if(mPlanner->getTerrainClass(x,y,terrain_class)) {
-                // add to trav map
-                trav_array[y][x] = terrain_class;
-            }
-        }
-    } 
-    envire::OrocosEmitter emitter_tmp(&env_tmp, _debug_internal_trav_map);
-    emitter_tmp.setTime(base::Time::now());
-    emitter_tmp.flush();
-}
+// void Task::sendInternalDStarLiteMap() {
+//     RTT::log(RTT::Info) <<  "SimplePathPlanner: Send internal dstar lite trav map" << RTT::endlog();
+//     envire::Environment env_tmp;
+//     // Copy first received trav map.
+//     envire::TraversabilityGrid* trav_grid_tmp = new envire::TraversabilityGrid(*(mPlanner->getRootTravMap()));
+//     env_tmp.attachItem(trav_grid_tmp);
+//     envire::FrameNode* p_fn = new envire::FrameNode();
+//     env_tmp.getRootNode()->addChild(p_fn);
+//     trav_grid_tmp->setFrameNode(p_fn);
+// 
+//     int terrain_class = 0;
+//     envire::TraversabilityGrid::ArrayType& trav_array = trav_grid_tmp->getGridData();
+//     for(size_t x=0; x < trav_grid_tmp->getCellSizeX(); ++x) {
+//         for(size_t y=0; y < trav_grid_tmp->getCellSizeY(); ++y) {
+//             if(mPlanner->getTerrainClass(x,y,terrain_class)) {
+//                 // add to trav map
+//                 trav_array[y][x] = terrain_class;
+//             }
+//         }
+//     } 
+//     envire::OrocosEmitter emitter_tmp(&env_tmp, _debug_internal_trav_map);
+//     emitter_tmp.setTime(base::Time::now());
+//     emitter_tmp.flush();
+// }
 
 void Task::cleanupHook() {
     RTT::log(RTT::Info) << "SimplePathPlanner: Cleanup being called" << RTT::endlog();
