@@ -50,9 +50,9 @@ task_context "Task" do
     output_port("trajectory_out", "std::vector</base/Trajectory>").
         doc("Trajectory from goal to start, special wrapping for the trajectory follower")
 
-    output_port('debug_start_pos', 'base::Vector3d').
+    output_port('debug_start_pos', 'base::Waypoint').
         doc "Start position of current planning try"
-    output_port('debug_goal_pos', 'base::Vector3d').
+    output_port('debug_goal_pos', 'base::Waypoint').
         doc "goal position of current planning try"
 
     transformer do

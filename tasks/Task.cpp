@@ -170,8 +170,8 @@ void Task::updateHook()
         Eigen::Vector3d start_map = inputPosition2Map * mStartPos;
         Eigen::Vector3d goal_map = inputPosition2Map * mGoalPos;
         
-        _debug_start_pos.write(start_map);
-        _debug_goal_pos.write(goal_map);
+        _debug_start_pos.write(base::Waypoint(start_map, 0,0,0));
+        _debug_goal_pos.write(base::Waypoint(goal_map, 0,0,0));
         
         RTT::log(RTT::Info) << "SimplePathPlanner: Planning" << RTT::endlog();
         // Check whether there is an obstacle on the goal position.
