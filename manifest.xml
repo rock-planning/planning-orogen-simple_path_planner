@@ -11,5 +11,6 @@
   <depend package="planning/nav_graph_search" />
   <depend package="slam/envire" />
   <depend package="slam/orogen/envire" />
+  <depend package="drivers/orogen/transformer" />
   <depend package="base/orogen/types" />
 </package>
