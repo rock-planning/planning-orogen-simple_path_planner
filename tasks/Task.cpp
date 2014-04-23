@@ -238,9 +238,18 @@ void Task::updateHook()
             }
             RTT::log(RTT::Info) << oss.str() << RTT::endlog();
 
+	    Eigen::Affine3d map2Trajectory(bodyCenter2Trajectory * bodyCenter2Map.inverse());
+
+	    std::vector<base::Vector3d> trajectory_outFrame;
+	    std::vector<base::Vector3d>::iterator it_map = trajectory_map.begin();
+	    for(; it_map != trajectory_map.end(); ++it_map) {
+		trajectory_outFrame.push_back(map2Trajectory * *it_map);
+	    }
+
+
             base::Trajectory base_trajectory;
             base_trajectory.speed = 0.06; // set m/s.
-            base_trajectory.spline.interpolate(trajectory_map);
+            base_trajectory.spline.interpolate(trajectory_outFrame);
 
             // Stuff it in a vector (it's possible to send several trajectories
             // which would be completed consecutively)
